@@ -31,3 +31,8 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+
+# Vercel CLI link metadata (project ids; not source)
+.vercel/
+
+.vercel

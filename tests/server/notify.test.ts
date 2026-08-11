@@ -113,12 +113,13 @@ describe("activity handler — operator pings", () => {
 });
 
 /**
- * REGRESSION corpus for the two-sibling-apps outage (2026-08-12): both freshly deployed apps had
- * RESEND_API_KEY copied over but not RESEND_FROM, so every send fell back to the sandbox sender,
- * Resend rejected it, and the contact form 502'd with "please try again" — advice that could never
- * help. The env pair is only configured together.
+ * REGRESSION corpus for the 2026-08-12 email outage — and for the over-correction that followed.
+ * The sibling apps failed because their RESEND_FROM pointed at UNVERIFIED domains (Resend 403s
+ * those); the first "fix" instead made key-only env fail closed in production, which broke the
+ * ORIGINAL app's live contact form — key-only (sandbox sender → account owner) is the config it
+ * had been running on for weeks, and the owner is every recipient this system has.
  */
-describe("resendSenderFromEnv — half-configured env fails closed", () => {
+describe("resendSenderFromEnv — env handling learned from the outage", () => {
   /** Run fn with a temporary process.env shape, always restoring the original values. */
   async function withEnv(vars: Record<string, string | undefined>, fn: () => Promise<void> | void) {
     const saved = new Map(Object.keys(vars).map((k) => [k, process.env[k]]));
@@ -145,13 +146,17 @@ describe("resendSenderFromEnv — half-configured env fails closed", () => {
     return { impl, calls };
   }
 
-  it("REGRESSION: a key with NO RESEND_FROM in production is unconfigured, not sandbox — the routes 503 honestly instead of 502ing every send", async () => {
-    await withEnv({ RESEND_API_KEY: "re_test_key", RESEND_FROM: undefined, NODE_ENV: "production" }, () => {
-      expect(resendSenderFromEnv()).toBeNull();
+  it("REGRESSION: key-only env builds a working sandbox sender IN PRODUCTION — failing closed here broke the original app's live contact form", async () => {
+    await withEnv({ RESEND_API_KEY: "re_test_key", RESEND_FROM: undefined, NODE_ENV: "production" }, async () => {
+      const { impl, calls } = fakeFetch(200, "{}");
+      const sender = resendSenderFromEnv(impl);
+      expect(sender).not.toBeNull();
+      await sender!({ subject: "s", text: "t" });
+      expect((calls[0]!.body as { from: string }).from).toBe("NextOn <onboarding@resend.dev>");
     });
   });
 
-  it("outside production the sandbox fallback still works, so local dev needs no setup", async () => {
+  it("key-only works in dev too, so local needs no setup", async () => {
     await withEnv({ RESEND_API_KEY: "re_test_key", RESEND_FROM: undefined, NODE_ENV: "test" }, async () => {
       const { impl, calls } = fakeFetch(200, "{}");
       const sender = resendSenderFromEnv(impl);

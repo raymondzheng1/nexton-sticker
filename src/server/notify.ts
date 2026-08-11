@@ -41,13 +41,15 @@ export function resendSenderFromEnv(fetchImpl: typeof fetch = fetch): EmailSende
   const key = process.env.RESEND_API_KEY;
   if (!key) return null;
   const from = process.env.RESEND_FROM;
-  // A key with no RESEND_FROM is HALF-configured, and in production the sandbox fallback doesn't
-  // just underdeliver — Resend rejects it outright once the account uses a verified domain, so
-  // every send 502s with a "please try again" the user CAN'T fix by trying again. Fail closed as
-  // unconfigured instead (the routes' 503 copy tells the operator what's actually wrong). Proven
-  // the hard way: two freshly deployed sibling apps had the key copied over but not RESEND_FROM,
-  // and their contact forms were dead on arrival while this comment's absence said nothing.
-  if (!from && process.env.NODE_ENV === "production") return null;
+  // Key-only (no RESEND_FROM) is a WORKING production config here, not a half-configured one:
+  // the sandbox sender delivers to the Resend ACCOUNT OWNER's address, and the owner is every
+  // recipient this system has (contact enquiries + activity pings both go to the operator). A
+  // 2026-08-12 change made this branch fail closed in production and thereby broke the original
+  // app's live contact form, which had run for weeks on exactly this config. The real outage that
+  // motivated it was different: the sibling apps had RESEND_FROM set to UNVERIFIED domains, which
+  // Resend 403s — that is caught below by surfacing Resend's response body, not by refusing the
+  // key-only setup. If this product ever emails anyone besides the operator, RESEND_FROM on a
+  // verified domain becomes mandatory; until then, don't "protect" a config that demonstrably works.
   const to = process.env.CONTACT_TO_EMAIL ?? "raymond.zheng@gmail.com";
   return async (msg) => {
     const res = await fetchImpl("https://api.resend.com/emails", {
