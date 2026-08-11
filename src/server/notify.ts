@@ -40,14 +40,21 @@ export type EmailSender = (msg: EmailMessage) => Promise<void>;
 export function resendSenderFromEnv(fetchImpl: typeof fetch = fetch): EmailSender | null {
   const key = process.env.RESEND_API_KEY;
   if (!key) return null;
+  const from = process.env.RESEND_FROM;
+  // A key with no RESEND_FROM is HALF-configured, and in production the sandbox fallback doesn't
+  // just underdeliver — Resend rejects it outright once the account uses a verified domain, so
+  // every send 502s with a "please try again" the user CAN'T fix by trying again. Fail closed as
+  // unconfigured instead (the routes' 503 copy tells the operator what's actually wrong). Proven
+  // the hard way: two freshly deployed sibling apps had the key copied over but not RESEND_FROM,
+  // and their contact forms were dead on arrival while this comment's absence said nothing.
+  if (!from && process.env.NODE_ENV === "production") return null;
   const to = process.env.CONTACT_TO_EMAIL ?? "raymond.zheng@gmail.com";
-  const from = process.env.RESEND_FROM ?? "NextOn <onboarding@resend.dev>";
   return async (msg) => {
     const res = await fetchImpl("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        from,
+        from: from ?? "NextOn <onboarding@resend.dev>",
         to: [to],
         subject: msg.subject,
         text: msg.text,
@@ -55,7 +62,10 @@ export function resendSenderFromEnv(fetchImpl: typeof fetch = fetch): EmailSende
       }),
     });
     if (!res.ok) {
-      throw new Error(`resend send failed: ${res.status}`);
+      // Resend's body names the actual problem ("domain is not verified", key errors, …). A bare
+      // status code sent a real outage down a multi-day guessing game once; never discard it.
+      const detail = await res.text().catch(() => "");
+      throw new Error(`resend send failed: ${res.status}${detail ? ` — ${detail.slice(0, 300)}` : ""}`);
     }
   };
 }

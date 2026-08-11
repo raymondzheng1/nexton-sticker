@@ -9,6 +9,7 @@ import {
   ACTIVITY_TYPES,
   handleActivityRequest,
   handleContactRequest,
+  resendSenderFromEnv,
   zActivityRequest,
   zContactRequest,
   type EmailMessage,
@@ -108,5 +109,76 @@ describe("activity handler — operator pings", () => {
       // A label, not the raw enum key leaking into the operator's inbox.
       expect(subject).not.toContain("_");
     }
+  });
+});
+
+/**
+ * REGRESSION corpus for the two-sibling-apps outage (2026-08-12): both freshly deployed apps had
+ * RESEND_API_KEY copied over but not RESEND_FROM, so every send fell back to the sandbox sender,
+ * Resend rejected it, and the contact form 502'd with "please try again" — advice that could never
+ * help. The env pair is only configured together.
+ */
+describe("resendSenderFromEnv — half-configured env fails closed", () => {
+  /** Run fn with a temporary process.env shape, always restoring the original values. */
+  async function withEnv(vars: Record<string, string | undefined>, fn: () => Promise<void> | void) {
+    const saved = new Map(Object.keys(vars).map((k) => [k, process.env[k]]));
+    for (const [k, v] of Object.entries(vars)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+    try {
+      await fn();
+    } finally {
+      for (const [k, v] of saved) {
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+      }
+    }
+  }
+
+  function fakeFetch(status: number, body: string) {
+    const calls: { body: unknown }[] = [];
+    const impl = ((_url: unknown, init?: { body?: unknown }) => {
+      calls.push({ body: typeof init?.body === "string" ? JSON.parse(init.body) : null });
+      return Promise.resolve({ ok: status < 400, status, text: () => Promise.resolve(body) });
+    }) as unknown as typeof fetch;
+    return { impl, calls };
+  }
+
+  it("REGRESSION: a key with NO RESEND_FROM in production is unconfigured, not sandbox — the routes 503 honestly instead of 502ing every send", async () => {
+    await withEnv({ RESEND_API_KEY: "re_test_key", RESEND_FROM: undefined, NODE_ENV: "production" }, () => {
+      expect(resendSenderFromEnv()).toBeNull();
+    });
+  });
+
+  it("outside production the sandbox fallback still works, so local dev needs no setup", async () => {
+    await withEnv({ RESEND_API_KEY: "re_test_key", RESEND_FROM: undefined, NODE_ENV: "test" }, async () => {
+      const { impl, calls } = fakeFetch(200, "{}");
+      const sender = resendSenderFromEnv(impl);
+      expect(sender).not.toBeNull();
+      await sender!({ subject: "s", text: "t" });
+      expect((calls[0]!.body as { from: string }).from).toBe("NextOn <onboarding@resend.dev>");
+    });
+  });
+
+  it("key + RESEND_FROM in production sends from the configured address", async () => {
+    await withEnv(
+      { RESEND_API_KEY: "re_test_key", RESEND_FROM: "NextOn <hello@example.com>", NODE_ENV: "production" },
+      async () => {
+        const { impl, calls } = fakeFetch(200, "{}");
+        const sender = resendSenderFromEnv(impl);
+        expect(sender).not.toBeNull();
+        await sender!({ subject: "s", text: "t" });
+        expect((calls[0]!.body as { from: string }).from).toBe("NextOn <hello@example.com>");
+      },
+    );
+  });
+
+  it("REGRESSION: a rejected send surfaces Resend's OWN reason, not a bare status code", async () => {
+    await withEnv({ RESEND_API_KEY: "re_test_key", RESEND_FROM: "NextOn <hello@example.com>" }, async () => {
+      const { impl } = fakeFetch(403, '{"message":"The example.com domain is not verified"}');
+      const sender = resendSenderFromEnv(impl);
+      await expect(sender!({ subject: "s", text: "t" })).rejects.toThrow(/403.*domain is not verified/);
+    });
   });
 });
