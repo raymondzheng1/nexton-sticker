@@ -1,0 +1,176 @@
+/*
+ * NextOn "Sticker Album" — a football sticker album.
+ *
+ * Cream paper with a faint grain, white-bordered stickers that sit slightly rotated, handwritten
+ * margin notes, hard offset shadows (a sticker is a physical thing lying on paper — it casts an
+ * edge, not a blur), and one signature device: the player who needs minutes is a MISSING sticker
+ * (dashed red outline). The palette is fixed rather than themed: a sticker album is paper, so
+ * `color-scheme: light` is deliberate — the same call the newspaper app made.
+ *
+ * These custom properties are the single source of truth for the design. Components never
+ * hard-code a colour, shadow or radius from this table.
+ */
+:root {
+  color-scheme: light;
+
+  /* ── paper and ink ── */
+  --paper: #f6edd9;
+  --grain: radial-gradient(rgba(43, 36, 23, 0.05) 1px, transparent 1.2px);
+  --ink: #2b2417;
+  --ink-body: #5c5138; /* running text */
+  --tan: #8a7a55; /* handwriting, kickers, muted labels */
+  --card: #faf5e8; /* cream card insets */
+  --track: #f0e6cf; /* progress tracks */
+  --sticker-white: #ffffff; /* the sticker border stock */
+
+  /* ── the accents ── */
+  --red: #e0452c;
+  --red-deep: #c9553d; /* missing-slot dashes, "off" ink, deep red */
+  --green: #2b8a4b;
+  --green-dark: #237a40;
+  --yellow: #e0a52c;
+  --yellow-dark: #c98f1d;
+  --blue: #2f6fbf;
+  --blue-dark: #275ea6;
+  --purple: #7a4fb3;
+  --purple-dark: #68409e;
+  --teal: #3aa08a;
+  --teal-dark: #2f8a76;
+  --pink: #c95f8e;
+  --pink-dark: #b34d7c;
+
+  /* ── borders ── */
+  --border-tan: #c9b98e;
+  --border-tan-lt: #d9cba6;
+
+  /* ── the foil (shiny-rare card frame) ── */
+  --foil: linear-gradient(115deg, #e9d8ff 0%, #ffe9c7 30%, #d2f4e0 62%, #cfe6ff 100%);
+
+  /* ── status: ALWAYS glyph + word + colour, never colour alone ── */
+  --st-under: #2f6fbf; /* ▲ needs      */
+  --st-on: #2b8a4b; /* ✓ on target  */
+  --st-over: #c9553d; /* ▼ rest       */
+
+  /* ── shadows: hard offset for sticker chrome, soft for cards ── */
+  --shadow-hard-2: 0 2px 0 rgba(43, 36, 23, 0.25);
+  --shadow-hard-3: 0 3px 0 rgba(43, 36, 23, 0.25);
+  --shadow-hard-4: 0 4px 0 rgba(43, 36, 23, 0.3);
+  --shadow-press: 0 2px 0 rgba(43, 36, 23, 0.3); /* :active — the sticker pressed down */
+  --shadow-soft: 0 3px 8px rgba(43, 36, 23, 0.18);
+  --shadow-deep: 0 6px 16px rgba(43, 36, 23, 0.22); /* the foil card floats highest */
+
+  /* ── radii: 14 CTA/foil · 12 cards · 8 stickers · 999 pills ── */
+  --r-cta: 14px;
+  --r-card: 12px;
+  --r-sticker: 8px;
+  --r-pill: 999px;
+
+  /* ── measure ── */
+  --gutter: 20px; /* marketing page */
+  --gutter-app: 16px; /* app screens */
+  --tap: 44px;
+  --cta-h: 52px;
+
+  --font-display: var(--font-archivo), "Archivo", "Arial", sans-serif;
+  --font-hand: var(--font-caveat), "Caveat", cursive;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-mono: ui-monospace, Menlo, Consolas, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--paper);
+  background-image: var(--grain);
+  background-size: 14px 14px;
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  /* An album lies flat on the table — it does not bounce. */
+  overscroll-behavior-y: none;
+  /* Every number in this product is a measurement — align them. */
+  font-variant-numeric: tabular-nums;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+}
+
+a {
+  color: var(--red);
+  font-weight: 800;
+  text-decoration: none;
+}
+a:hover {
+  color: var(--red-deep);
+  text-decoration: underline;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+/* Keyboard focus must read against cream, white stickers AND the red missing slots — blue is the
+   one accent nothing structural uses for chrome. */
+:focus-visible {
+  outline: 3px solid var(--blue);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: var(--red);
+  color: #fff;
+}
+
+input,
+select,
+textarea {
+  font-family: inherit;
+  /* ≥16px or iOS zooms the whole page on focus. */
+  font-size: 16px;
+  color: var(--ink);
+  background: var(--sticker-white);
+  border: 2px solid var(--border-tan-lt);
+  border-radius: 10px;
+  padding: 0 12px;
+  min-height: 48px;
+  width: 100%;
+}
+input::placeholder {
+  color: var(--tan);
+}
+select {
+  min-height: var(--tap);
+}
+
+/*
+ * Respect the reader: no hover straighten/lift, no fill-in delight, no peel or flash — anything
+ * that moves is stilled here. The hover rules themselves are additionally gated behind
+ * (prefers-reduced-motion: no-preference) in the modules, so stickers simply stay put.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

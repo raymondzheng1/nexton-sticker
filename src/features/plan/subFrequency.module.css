@@ -1,0 +1,65 @@
+/* The rotation dial as five sticker chips: white mini-stickers in a row, the chosen level pressed
+ * in red. Chip words are the sanctioned 11.5px uppercase micro-label; the full level name prints
+ * at reading size in the header row. */
+
+.level {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 13.5px;
+  color: var(--ink);
+}
+
+.chips {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.chip {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--tap);
+  border: 2px solid var(--border-tan-lt);
+  border-radius: var(--r-sticker);
+  background: var(--sticker-white);
+  color: var(--ink-body);
+  font-family: var(--font-sans);
+  font-weight: 900;
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0 2px;
+  box-shadow: var(--shadow-hard-2);
+}
+.chip:hover {
+  border-color: var(--border-tan);
+  color: var(--ink);
+}
+.chip:active {
+  transform: translateY(1px);
+  box-shadow: none;
+}
+.chipOn {
+  background: var(--red);
+  border-color: var(--red);
+  color: #fff;
+}
+
+.ends {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 6px;
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: var(--tan);
+}
+
+.summary {
+  margin: 8px 0 0;
+  font-size: 13.5px;
+  font-weight: 800;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}

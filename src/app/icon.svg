@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- The album logo plate: red rounded square, tilted like a freshly stuck sticker,
+       with the white double-chevron ("next on"). Radius ~= 8/30 of the plate. -->
+  <g transform="rotate(-4 32 32)">
+    <rect x="7" y="7" width="50" height="50" rx="13.3" fill="#e0452c"/>
+    <g fill="none" stroke="#fff" stroke-width="5.7" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M25.8 24.7l7.3 7.3-7.3 7.3"/>
+      <path d="M33.1 24.7l7.3 7.3-7.3 7.3" opacity=".55"/>
+    </g>
+  </g>
+</svg>

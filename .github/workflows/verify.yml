@@ -1,0 +1,37 @@
+# The gate, run on a machine that isn't the author's.
+#
+# `main` auto-deploys to Vercel, and a Vercel build runs `next build` — which typechecks but runs no
+# tests, no eslint and not the on-field invariant linter. Without this, the 262-test regression
+# corpus would execute nowhere except a laptop before a push.
+name: Verify
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          # Match the deployed runtime, not npm-latest.
+          node-version: "22"
+          cache: npm
+
+      # --ignore-scripts: never run package lifecycle scripts just to test.
+      - name: Install (lockfile-exact)
+        run: npm ci --ignore-scripts
+
+      - name: Verify
+        run: npm run verify

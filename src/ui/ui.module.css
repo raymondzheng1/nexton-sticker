@@ -1,0 +1,561 @@
+/*
+ * Sticker Album primitives.
+ *
+ * The system in one breath: cream paper, white-bordered stickers lying at a slight rotation with
+ * HARD offset shadows (a sticker has an edge, not a glow), Caveat handwriting in the margins, one
+ * foil frame for the rare card, and dashed red outlines where a sticker is MISSING. Radii are
+ * fixed: 14 CTA/foil · 12 cards · 8 stickers · 999 pills. Rotations are deterministic — the tilt()
+ * helper hashes an id; nothing in this app ever calls Math.random.
+ */
+
+/* ── page shell ───────────────────────────────────────────────────────────── */
+.page {
+  max-width: 560px; /* ≥768px: a single centred column; the paper grain tiles beneath */
+  margin: 0 auto;
+  min-height: 100dvh;
+  padding-bottom: calc(28px + env(safe-area-inset-bottom));
+}
+
+.gutter {
+  padding-left: var(--gutter-app);
+  padding-right: var(--gutter-app);
+}
+
+/* ── header / logo ────────────────────────────────────────────────────────── */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px var(--gutter-app) 0;
+  padding-top: calc(14px + env(safe-area-inset-top));
+}
+
+.logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+}
+.logoPlate {
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--red);
+  transform: rotate(-4deg);
+  box-shadow: var(--shadow-hard-2);
+  flex: none;
+}
+.logoWord {
+  font-family: var(--font-display);
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.logoOn {
+  color: var(--red);
+}
+
+.backLink {
+  display: grid;
+  place-items: center;
+  width: var(--tap);
+  height: var(--tap);
+  margin-left: -12px;
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--ink);
+  text-decoration: none;
+}
+.backLink:hover {
+  color: var(--red);
+  text-decoration: none;
+}
+
+/* ── pill (radius-999 badge) ──────────────────────────────────────────────── */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: var(--r-pill);
+  padding: 4px 11px;
+  font-family: var(--font-sans);
+  font-weight: 900;
+  font-size: 11.5px; /* the sanctioned uppercase micro-label size */
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  box-shadow: var(--shadow-hard-2);
+  white-space: nowrap;
+}
+.pillRed {
+  background: var(--red);
+  color: #fff;
+}
+.pillNeutral {
+  background: var(--sticker-white);
+  color: var(--ink-body);
+  border: 2px solid var(--border-tan-lt);
+}
+.pillDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+
+/* ── kicker (section label) ───────────────────────────────────────────────── */
+.kicker {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--tan);
+  margin: 22px 0 8px;
+}
+
+/* ── handwriting ──────────────────────────────────────────────────────────── */
+.hand {
+  display: inline-block;
+  font-family: var(--font-hand);
+  font-weight: 600;
+  color: var(--tan);
+  line-height: 1.15;
+}
+
+/* ── sticker frame ────────────────────────────────────────────────────────── */
+.stickerFrame {
+  background: var(--sticker-white);
+  border-radius: var(--r-sticker);
+  padding: 6px;
+  box-shadow: var(--shadow-soft);
+  transform: rotate(var(--tilt, 0deg));
+}
+/* Desktop-only delight: the sticker straightens and lifts under the pointer. Fine pointers only,
+   and never for a reader who asked for less motion. */
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .stickerFrame {
+    transition:
+      transform 150ms ease-out,
+      box-shadow 150ms ease-out;
+  }
+  .stickerFrame:hover {
+    transform: rotate(0deg) translateY(-2px);
+    box-shadow: var(--shadow-deep);
+  }
+}
+
+/* ── player sticker ───────────────────────────────────────────────────────── */
+.ps {
+  border: none;
+  font-family: inherit;
+  color: inherit;
+  text-align: center;
+  display: block;
+  width: 100%;
+  min-width: 0;
+}
+.psTappable {
+  cursor: pointer;
+  min-height: var(--tap);
+}
+.psTappable:disabled {
+  cursor: default;
+}
+.psSelected {
+  outline: 3px solid var(--blue);
+  outline-offset: 2px;
+}
+.psFace {
+  background: linear-gradient(178deg, var(--face-a), var(--face-b));
+  color: #fff;
+  font-weight: 900;
+  overflow: hidden;
+}
+.psFaceGrid {
+  border-radius: 5px;
+  padding: 12px 6px 10px;
+}
+.psFaceMini {
+  border-radius: 4px;
+  padding: 4px 8px;
+}
+.psArt {
+  display: block;
+  font-size: 22px;
+  line-height: 1.2;
+}
+.psName {
+  display: block;
+  font-size: 15px;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.psNameMini {
+  font-size: 13.5px;
+}
+.psFoot {
+  padding: 4px 2px 1px;
+  font-size: 13.5px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-body);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.psFootMini {
+  padding: 3px 2px 1px;
+  font-size: 12.5px;
+}
+
+/* ── missing slot (THE signature device) ──────────────────────────────────── */
+.missing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border: 3px dashed var(--red-deep);
+  border-radius: var(--r-sticker);
+  background: rgba(224, 69, 44, 0.06);
+  padding: 8px 6px;
+  text-align: center;
+  transform: rotate(var(--tilt, 0deg));
+  font-family: inherit;
+  color: inherit;
+  width: 100%;
+  min-width: 0;
+}
+.missingTappable {
+  cursor: pointer;
+  min-height: var(--tap);
+}
+.missingSelected {
+  outline: 3px solid var(--blue);
+  outline-offset: 2px;
+}
+.missingName {
+  font-weight: 900;
+  font-size: 15px;
+  color: var(--red-deep);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.missingNote {
+  font-family: var(--font-hand);
+  font-weight: 600;
+  font-size: 19px;
+  line-height: 1.1;
+  color: var(--red-deep);
+}
+.missingDetail {
+  font-weight: 800;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── foil card (shiny rare) ───────────────────────────────────────────────── */
+.foil {
+  position: relative;
+  background: var(--foil);
+  border-radius: var(--r-cta);
+  padding: 7px;
+  box-shadow: var(--shadow-deep);
+  transform: rotate(var(--tilt, 0deg));
+}
+.foilBadge {
+  position: absolute;
+  top: -11px;
+  left: 14px;
+  z-index: 1;
+}
+.foilInner {
+  background: var(--sticker-white);
+  border-radius: 9px;
+  padding: 12px 14px;
+}
+
+/* ── hard buttons (the CTA chrome) ────────────────────────────────────────── */
+.hardBtn {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: var(--cta-h);
+  border: none;
+  border-radius: var(--r-cta);
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 16px;
+  letter-spacing: 0.01em;
+  text-decoration: none;
+  text-align: center;
+  padding: 0 16px;
+}
+.hardGreen {
+  background: var(--green);
+  color: #fff;
+  box-shadow: var(--shadow-hard-4);
+}
+.hardGreen:hover {
+  background: var(--green-dark);
+  color: #fff;
+  text-decoration: none;
+}
+.hardRed {
+  background: var(--red);
+  color: #fff;
+  box-shadow: var(--shadow-hard-4);
+}
+.hardRed:hover {
+  background: var(--red-deep);
+  color: #fff;
+  text-decoration: none;
+}
+.hardOutline {
+  background: var(--sticker-white);
+  color: var(--ink-body);
+  border: 2px solid var(--border-tan-lt);
+  box-shadow: none;
+}
+.hardOutline:hover {
+  border-color: var(--border-tan);
+  color: var(--ink);
+  text-decoration: none;
+}
+/* Pressed = the sticker pushed flat: down 1px, shadow shrinking to 2px. */
+.hardBtn:active {
+  transform: translateY(1px);
+}
+.hardGreen:active,
+.hardRed:active {
+  box-shadow: var(--shadow-press);
+}
+.hardBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+}
+.hardMd {
+  height: var(--tap);
+  border-radius: 10px;
+  font-size: 14.5px;
+}
+.hardMd.hardGreen,
+.hardMd.hardRed {
+  box-shadow: var(--shadow-hard-3);
+}
+.hardAuto {
+  width: auto;
+}
+
+/* Small square utility button — steppers, remove, ± — a white mini-sticker. */
+.iconBtn {
+  display: grid;
+  place-items: center;
+  width: var(--tap);
+  height: var(--tap);
+  border: 2px solid var(--border-tan-lt);
+  border-radius: 10px;
+  background: var(--sticker-white);
+  color: var(--ink-body);
+  font-size: 20px;
+  font-weight: 800;
+  flex: none;
+}
+.iconBtn:hover {
+  border-color: var(--border-tan);
+  color: var(--ink);
+}
+.iconBtn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* ── progress track ───────────────────────────────────────────────────────── */
+.progress {
+  position: relative;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--track);
+  flex: 1;
+  min-width: 40px;
+}
+.progressFill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--green);
+}
+/* The red fair-share tick (projected-minutes bars). */
+.progressTick {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+  background: var(--red);
+}
+
+/* ── status: colour is never alone ────────────────────────────────────────── */
+.status {
+  font-weight: 800;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.statusOn {
+  color: var(--st-on);
+}
+.statusUnder {
+  color: var(--st-under);
+}
+.statusOver {
+  color: var(--st-over);
+}
+
+/* ── table rows (squad lists, projections) ────────────────────────────────── */
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 2px;
+  border-bottom: 1px dotted var(--border-tan);
+  width: 100%;
+  background: transparent;
+  border-left: none;
+  border-right: none;
+  border-top: none;
+  text-align: left;
+  color: inherit;
+  font-family: inherit;
+}
+.rowLast {
+  border-bottom: none;
+}
+
+/* Cream card inset — tables and receipts sit on this. */
+.cardInset {
+  background: var(--card);
+  border-radius: 10px;
+  padding: 8px 12px;
+}
+
+/* ── body copy helpers ────────────────────────────────────────────────────── */
+.label {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--tan);
+}
+.body {
+  margin: 6px 0 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink-body);
+}
+.note {
+  margin: 6px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-body);
+}
+.empty {
+  padding: 36px 0;
+  text-align: center;
+  color: var(--tan);
+  font-weight: 700;
+}
+
+/* ── sticky action bar ────────────────────────────────────────────────────── */
+.actionBar {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  gap: 8px;
+  padding: 14px var(--gutter-app) calc(14px + env(safe-area-inset-bottom));
+  border-top: 2px solid var(--border-tan-lt);
+  background-color: var(--paper);
+  background-image: var(--grain);
+  background-size: 14px 14px;
+  margin-top: 16px;
+}
+
+/* ── sheet (bottom modal) — a card peeled up from the album ───────────────── */
+.sheetBackdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(43, 36, 23, 0.5);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 50;
+}
+.sheet {
+  width: 100%;
+  max-width: 560px;
+  max-height: 88dvh;
+  overflow-y: auto;
+  background-color: var(--paper);
+  background-image: var(--grain);
+  background-size: 14px 14px;
+  border-radius: 16px 16px 0 0;
+  border-top: 2px solid var(--border-tan-lt);
+  padding: 18px var(--gutter-app) calc(18px + env(safe-area-inset-bottom));
+}
+.sheetTitle {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 22px;
+  letter-spacing: -0.02em;
+}
+
+/* ── toast ────────────────────────────────────────────────────────────────── */
+.toast {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(20px + env(safe-area-inset-bottom));
+  background: var(--ink);
+  color: var(--paper);
+  padding: 12px 18px;
+  border-radius: 10px;
+  box-shadow: var(--shadow-hard-3);
+  font-size: 13.5px;
+  font-weight: 800;
+  z-index: 60;
+  max-width: calc(100% - 32px);
+  text-align: center;
+}
+
+/* ── misc ─────────────────────────────────────────────────────────────────── */
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.spread {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+/* Screen-reader-only, for labels the design writes as glyphs. */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

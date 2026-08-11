@@ -1,0 +1,104 @@
+/* The planned changes as a stack of sticker rows: each change is a small white sticker with a
+ * time chip and its Off/On lines. Edits are 44px mini-sticker buttons; the deep red ✕ removes. */
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.card {
+  padding: 8px;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.time {
+  flex: 1;
+  text-align: center;
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.remove {
+  color: var(--red-deep);
+}
+.remove:hover {
+  border-color: var(--red-deep);
+  color: var(--red-deep);
+}
+
+.swap {
+  margin-top: 8px;
+  background: var(--card);
+  border-radius: 8px;
+  padding: 6px 8px;
+}
+
+.swapRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+}
+.swapRow select {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--tap);
+}
+
+.swapLabel {
+  flex: none;
+  width: 44px;
+  font-size: 11.5px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.swapLabelOff {
+  color: var(--red-deep);
+}
+.swapLabelOn {
+  color: var(--green);
+}
+
+.slot {
+  flex: none;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--tan);
+  white-space: nowrap;
+}
+
+/* ── read-only "still to come" rows ── */
+.upTime {
+  flex: none;
+  width: 52px;
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  color: var(--tan);
+}
+.upNext {
+  color: var(--red);
+}
+.upText {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink-body);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

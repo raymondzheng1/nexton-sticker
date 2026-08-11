@@ -1,0 +1,133 @@
+/* The album page: a white sticker frame (radius 12, padding 7, leaned −.5°) around the playing
+ * surface. Football = striped green grass with white chalk; basketball = warm court wood with
+ * cream lines. Players stand on it as mini stickers with ≥44px tap targets. */
+
+.figure {
+  margin: 0;
+}
+
+.frame {
+  background: var(--sticker-white);
+  border-radius: var(--r-card);
+  padding: 7px;
+  box-shadow: 0 4px 10px rgba(43, 36, 23, 0.2);
+  transform: rotate(-0.5deg);
+}
+
+.surface {
+  position: relative;
+  height: min(84vw, 440px);
+  border-radius: var(--r-sticker);
+  overflow: hidden;
+}
+
+.pitch {
+  background: linear-gradient(178deg, #3a9c5c 0%, #2f8a4e 100%);
+}
+/* 24px mowing bands. */
+.mowing {
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.06) 0 24px,
+    rgba(0, 0, 0, 0.05) 24px 48px
+  );
+}
+
+.court {
+  background: linear-gradient(178deg, #d9a05b 0%, #c98f4a 100%);
+}
+
+.lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* ── the stickers standing on it ── */
+.token {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: grid;
+  place-items: center;
+  min-width: var(--tap);
+  min-height: var(--tap);
+  max-width: 30%;
+}
+/* The second of a tight pair steps up so crowded lines stay readable and tappable. */
+.tokenUp {
+  transform: translate(-50%, -88%);
+}
+.tokenBtn {
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-family: inherit;
+  color: inherit;
+}
+.tokenBtn:disabled {
+  cursor: default;
+}
+.tokenSel {
+  z-index: 3;
+}
+
+.mini {
+  padding: 4px;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3);
+  max-width: 100%;
+}
+/* The engine suggests this one comes off — a red ring, never a red-only signal (the suggestion
+ * panel names them in words). */
+.miniFlagged {
+  outline: 3px solid var(--red);
+  outline-offset: 1px;
+}
+/* Just came on / just scored: one beat of pop. Stilled under prefers-reduced-motion by the
+ * global guard. */
+.miniFlash {
+  animation: stick 700ms ease-out 2;
+}
+@keyframes stick {
+  0% {
+    transform: rotate(var(--tilt, 0deg)) scale(1);
+  }
+  40% {
+    transform: rotate(0deg) scale(1.09);
+  }
+  100% {
+    transform: rotate(var(--tilt, 0deg)) scale(1);
+  }
+}
+
+/* ── the caption row under the page ── */
+.captionRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 0 4px;
+}
+.captionLeft {
+  min-width: 0;
+}
+.legend {
+  flex: none;
+  font-size: 12.5px;
+  font-weight: 800;
+  color: var(--ink-body);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.legendUnder {
+  color: var(--st-under);
+}
+.legendOn {
+  color: var(--st-on);
+}
+.legendOver {
+  color: var(--st-over);
+}
