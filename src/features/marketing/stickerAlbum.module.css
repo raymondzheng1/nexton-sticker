@@ -1,0 +1,299 @@
+/*
+ * The marketing album — design/README.md §1–8, recreated at exact px on a 390px design width.
+ * Gutters are 20px (16px for the sticker grid, per the mockup); ≥768px the whole album is one
+ * centred ~560px column and the rotations stay as drawn. Stickers, the missing slot, the foil
+ * frame and the hard-shadowed CTAs all come from src/ui — nothing re-implements them here.
+ */
+
+.paper {
+  max-width: 560px;
+  margin: 0 auto;
+  min-height: 100dvh;
+}
+
+/* ── 1 · header ─────────────────────────────────────────────────────────────── */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 16px 20px;
+  padding-top: calc(16px + env(safe-area-inset-top));
+}
+/* The returning coach's door back into the app (the album swaps its margin note for this). */
+.headerLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--red);
+  white-space: nowrap;
+}
+
+/* ── 2 · hero ───────────────────────────────────────────────────────────────── */
+.hero {
+  padding: 18px 20px 0;
+}
+.kicker {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--tan);
+}
+.hed {
+  margin: 10px 0 0;
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 44px;
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+.hedRed {
+  color: var(--red);
+}
+.sub {
+  margin: 14px 0 0;
+  font-size: 17px;
+  line-height: 1.55;
+  color: var(--ink-body);
+}
+.trustRow {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink-body);
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.trustDot {
+  color: var(--border-tan);
+}
+
+/* ── 3 · the sticker grid ───────────────────────────────────────────────────── */
+.gridWrap {
+  padding: 28px 16px 0;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.gridCaption {
+  margin: 10px 0 0;
+  text-align: center;
+}
+
+/* The once-only delight: Ava's sticker fades/scales into the dashed gap on first sight.
+   JS never arms it under prefers-reduced-motion, so the slot simply stays missing there. */
+.fillStack {
+  display: grid;
+}
+.fillStack > * {
+  grid-area: 1 / 1;
+}
+.fillGone {
+  opacity: 0;
+  transition: opacity 250ms ease-out;
+}
+.fillIn {
+  display: grid; /* stretches the sticker to the slot's height */
+  animation: fill-in 300ms ease-out both;
+}
+@keyframes fill-in {
+  from {
+    opacity: 0;
+    transform: scale(0.82);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* ── 4 · the foil "shiny rare" suggestion card ──────────────────────────────── */
+.foilWrap {
+  padding: 30px 20px 0;
+}
+.suggestHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 13.5px;
+  font-weight: 800;
+  color: var(--tan);
+}
+.countdown {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 21px;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.progressRow {
+  display: flex;
+  margin-top: 8px;
+}
+.swapRow {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--card);
+  border-radius: 10px;
+  padding: 11px 13px;
+  font-size: 15px;
+  font-weight: 800;
+}
+.swapOff {
+  color: var(--red-deep);
+}
+.swapArrow {
+  color: var(--tan);
+}
+.swapOn {
+  color: var(--green);
+}
+.swapPos {
+  margin-left: auto;
+  color: var(--tan);
+  font-weight: 600;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.swapActions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+.swapConfirm {
+  flex: 1;
+}
+.suggestCaption {
+  margin: 14px 0 0;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--ink-body);
+  text-align: center;
+}
+
+/* ── 5 · steps 1-2-3 ────────────────────────────────────────────────────────── */
+.steps {
+  margin: 30px 20px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.step {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.stepBadge {
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border-radius: 50%;
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-weight: 900;
+  font-size: 15px;
+  box-shadow: var(--shadow-hard-2);
+}
+.stepRed {
+  background: var(--red);
+  transform: rotate(-3deg);
+}
+.stepYellow {
+  background: var(--yellow);
+  transform: rotate(2deg);
+}
+.stepGreen {
+  background: var(--green);
+  transform: rotate(-2deg);
+}
+.stepText {
+  font-size: 15.5px;
+}
+.stepMuted {
+  color: var(--tan);
+}
+
+/* ── 6 · the swapsies note (receipt) ────────────────────────────────────────── */
+.receiptCard {
+  margin: 28px 20px 0;
+  background: var(--sticker-white);
+  border-radius: var(--r-card);
+  padding: 14px 16px;
+  box-shadow: var(--shadow-soft);
+  transform: rotate(-0.6deg);
+}
+.receiptTitle {
+  font-family: var(--font-hand);
+  font-weight: 600;
+  font-size: 22px;
+  line-height: 1.15;
+  color: var(--green);
+}
+.receipt {
+  margin-top: 6px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.65;
+  font-variant-numeric: tabular-nums;
+}
+.receiptVia {
+  color: var(--tan);
+}
+
+/* ── 7 · offline card ───────────────────────────────────────────────────────── */
+.offline {
+  margin: 28px 20px 0;
+  border: 3px dashed var(--border-tan);
+  border-radius: var(--r-card);
+  padding: 14px 16px;
+  text-align: center;
+}
+.offlineHead {
+  font-weight: 900;
+  font-size: 16.5px;
+}
+.offlineBody {
+  margin: 4px 0 0;
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: var(--ink-body);
+}
+.privacyLink {
+  white-space: nowrap;
+}
+
+/* ── 8 · footer CTA ─────────────────────────────────────────────────────────── */
+.footer {
+  padding: 30px 20px calc(42px + env(safe-area-inset-bottom));
+  text-align: center;
+}
+.signOff {
+  margin-top: 12px;
+}
+.contactLine {
+  margin: 18px 0 0;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--ink-body);
+}
+/* The privacy footnote the offline card's "Privacy →" anchors to. */
+.privacyNote {
+  margin: 18px auto 0;
+  max-width: 480px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--ink-body);
+  scroll-margin-top: 20px;
+}

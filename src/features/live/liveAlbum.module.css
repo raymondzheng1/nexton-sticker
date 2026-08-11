@@ -1,0 +1,490 @@
+/*
+ * THE ALBUM PAGE — layout for the live match screen (and its sheets).
+ *
+ * Only layout and the design's own chrome live here: the white sticker buttons of the clock row and
+ * action bar, the foil card's innards, the bench grid, the match-log rows. No new colours, no new
+ * radii — everything reads from the tokens in globals.css, and every rotation a component carries
+ * comes through tilt() in the page.
+ */
+
+/* ── header + clock row ───────────────────────────────────────────────────── */
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.clockRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+}
+.clockCol {
+  min-width: 0;
+}
+.clock {
+  display: block;
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 44px;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.clockNote {
+  display: block;
+  margin-top: 2px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Basketball's period clock runs DOWN; elapsed still leads, this rides beside it. */
+.clockAside {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+  min-width: 0;
+}
+.clockAsideValue {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 19px;
+  font-variant-numeric: tabular-nums;
+}
+.clockAsideLabel {
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--tan);
+}
+/* Hold + End half, grouped so they wrap to a second line TOGETHER (basketball's count-down aside
+   eats the width the pair needs at 390px) — the proven fix for this exact overflow. */
+.clockBtns {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+/* The ⏸ Hold sticker: an 84×48 white card with a hard offset shadow. */
+.holdBtn {
+  min-width: 84px;
+  height: 48px;
+  padding: 0 12px;
+  border: none;
+  border-radius: var(--r-card);
+  background: var(--sticker-white);
+  color: var(--ink-body);
+  font-family: var(--font-sans);
+  font-weight: 900;
+  font-size: 13.5px;
+  box-shadow: var(--shadow-hard-3);
+  white-space: nowrap;
+}
+.holdBtn:active {
+  transform: translateY(1px);
+  box-shadow: var(--shadow-press);
+}
+
+/* ── content column ───────────────────────────────────────────────────────── */
+/* Pushes the sticky action bar to the foot of a short page without fighting .page. */
+.grow {
+  flex: 1 1 auto;
+}
+
+/* A plain white card for the break / full-time / error notices. */
+.panelCard {
+  background: var(--sticker-white);
+  border-radius: var(--r-card);
+  padding: 14px 16px;
+  box-shadow: var(--shadow-soft);
+  margin-top: 16px;
+  transform: rotate(var(--tilt, 0deg));
+}
+.panelTitle {
+  display: block;
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 18px;
+  letter-spacing: -0.01em;
+}
+
+/* ── the foil card's innards ──────────────────────────────────────────────── */
+.foilWrap {
+  margin-top: 22px; /* room for the pinned badge */
+}
+.foilHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.foilTitle {
+  font-size: 13.5px;
+  font-weight: 800;
+  color: var(--tan);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.foilCount {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+.foilProgress {
+  display: flex;
+  margin-top: 8px;
+}
+.foilBtns {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.foilConfirm {
+  flex: 1;
+}
+
+/* One suggested swap, written the album way: "Leo ▼ off → Ava ▲ on · left mid". */
+.swapRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  width: 100%;
+  min-height: var(--tap);
+  margin-top: 8px;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 10px;
+  background: var(--card);
+  text-align: left;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--ink);
+}
+.swapOff {
+  color: var(--red-deep);
+}
+.swapArrow {
+  color: var(--tan);
+  font-weight: 800;
+}
+.swapOn {
+  color: var(--green);
+}
+.swapPos {
+  margin-left: auto;
+  color: var(--tan);
+  font-size: 13px;
+  font-weight: 800;
+}
+/* Skip one line of a multi-sub. */
+.skipBtn {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin: -4px -6px -4px 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--tan);
+  font-size: 18px;
+  font-weight: 800;
+}
+.skipBtn:hover {
+  color: var(--red-deep);
+}
+
+/* The outlined snooze chip (white sticker, 2px tan border). */
+.snoozeBtn {
+  height: var(--tap);
+  padding: 0 14px;
+  border: 2px solid var(--border-tan-lt);
+  border-radius: 10px;
+  background: var(--sticker-white);
+  color: var(--ink-body);
+  font-family: inherit;
+  font-weight: 800;
+  font-size: 13.5px;
+  white-space: nowrap;
+}
+.snoozeBtn:hover {
+  border-color: var(--border-tan);
+  color: var(--ink);
+}
+
+/* ── the bench ────────────────────────────────────────────────────────────── */
+.benchGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 8px;
+}
+
+/* Out for the match — tappable "bring them back" chips. */
+.outList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+.outBtn {
+  min-height: var(--tap);
+  padding: 6px 12px;
+  border: none;
+  border-radius: 10px;
+  background: var(--sticker-white);
+  box-shadow: var(--shadow-hard-2);
+  color: var(--ink-body);
+  font-family: inherit;
+  font-weight: 800;
+  font-size: 13.5px;
+}
+.outBtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.outMins {
+  color: var(--tan);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── collapsible sections (match log · still to come) ─────────────────────── */
+.details {
+  margin-top: 22px;
+}
+.details summary {
+  list-style: none;
+  cursor: pointer;
+}
+.details summary::-webkit-details-marker {
+  display: none;
+}
+.detailsHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: var(--tap);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--tan);
+  border-bottom: 1px solid var(--border-tan-lt);
+}
+.detailsMark {
+  font-size: 13px;
+}
+.details[open] .markClosed {
+  display: none;
+}
+.details:not([open]) .markOpen {
+  display: none;
+}
+
+/* The match log: what actually happened, as dateline rows on cream card stock. */
+.logRow {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 9px 2px;
+  font-size: 13.5px;
+  border-bottom: 1px dotted var(--border-tan);
+}
+.logRowLast {
+  border-bottom: none;
+}
+.logTime {
+  min-width: 46px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.logText {
+  flex: 1;
+  min-width: 0;
+  color: var(--ink-body);
+}
+.logClock {
+  color: var(--tan);
+  font-weight: 700;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── sticky action bar ────────────────────────────────────────────────────── */
+.barCol {
+  flex-direction: column;
+}
+/* "⚽ Goal" / "⇄ Sub now" — 50px white sticker buttons. */
+.actionRow {
+  display: flex;
+  gap: 10px;
+}
+.actionBtn {
+  flex: 1;
+  height: 50px;
+  border: none;
+  border-radius: var(--r-card);
+  background: var(--sticker-white);
+  color: var(--ink);
+  font-family: inherit;
+  font-weight: 900;
+  font-size: 15px;
+  box-shadow: var(--shadow-hard-3);
+}
+.actionBtn:active {
+  transform: translateY(1px);
+  box-shadow: var(--shadow-press);
+}
+
+/* The selected player's action desk. */
+.selHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 17px;
+}
+.selSlot {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tan);
+}
+.chipRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.chip {
+  min-height: 38px;
+  padding: 4px 12px;
+  border: 2px solid var(--border-tan-lt);
+  border-radius: var(--r-pill);
+  background: var(--sticker-white);
+  color: var(--ink-body);
+  font-family: inherit;
+  font-weight: 800;
+  font-size: 13px;
+}
+.chip:hover {
+  border-color: var(--border-tan);
+  color: var(--ink);
+}
+.chipOn {
+  border-color: var(--ink);
+  color: var(--ink);
+  background: var(--card);
+}
+.chip:disabled {
+  cursor: default;
+}
+.actionGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 10px;
+}
+.miniBtn {
+  min-height: var(--tap);
+  padding: 4px 6px;
+  border: none;
+  border-radius: 10px;
+  background: var(--sticker-white);
+  box-shadow: var(--shadow-hard-2);
+  color: var(--ink-body);
+  font-family: inherit;
+  font-weight: 800;
+  font-size: 13.5px;
+  white-space: nowrap;
+}
+.miniBtn:active {
+  transform: translateY(1px);
+}
+.miniBtnInk {
+  background: var(--ink);
+  color: var(--paper);
+}
+.miniBtnRed {
+  background: var(--red);
+  color: #fff;
+}
+
+/* Uppercase micro-footnote (a caption, not a sentence). */
+.footnote {
+  margin: 8px 0 0;
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tan);
+}
+.footnoteBar {
+  text-align: center;
+}
+
+/* ── sheets ───────────────────────────────────────────────────────────────── */
+.sheetStack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 14px;
+}
+.sheetRow {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.addRow {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+/* "After the change" preview rows. */
+.previewRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 2px;
+  font-size: 13.5px;
+  border-bottom: 1px dotted var(--border-tan);
+}
+.previewRow:last-child {
+  border-bottom: none;
+}
+.previewIn {
+  color: var(--green);
+  font-weight: 800;
+}
+.previewTag {
+  color: var(--tan);
+  font-size: 12.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* Squad rows inside sheets (who scored, etc.). */
+.rowName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 800;
+  font-size: 15px;
+}

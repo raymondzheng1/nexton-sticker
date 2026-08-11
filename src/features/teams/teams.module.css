@@ -1,0 +1,437 @@
+/*
+ * The club desk in album language — teams index ("your albums"), the roster editor ("stick your
+ * squad in"), the team hub and the corrections screen. Only layout the shared primitives don't
+ * already carry lives here. Every colour, shadow and radius comes from the globals.css tokens;
+ * nothing is invented, and every rotation arrives via the tilt() custom property.
+ */
+
+/* ── headline + header helpers ────────────────────────────────────────────── */
+.hed {
+  font-size: 28px;
+  margin-top: 18px;
+}
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+/* ── labelled field ───────────────────────────────────────────────────────── */
+.field {
+  margin-top: 16px;
+}
+.fieldLabel {
+  display: block;
+  font-size: 11.5px; /* the sanctioned uppercase micro-label size */
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--tan);
+  margin-bottom: 6px;
+}
+
+/* ── toggle chips — loose sticker vs stuck-down sticker ───────────────────── */
+/* Unselected = a loose sticker (raised, hard shadow). Selected = pressed flat onto the page:
+   shadow gone, sunk 2px, ink border + cream fill. aria-pressed carries the state for AT. */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.chip {
+  min-height: var(--tap);
+  padding: 0 14px;
+  border: 2px solid var(--border-tan-lt);
+  border-radius: 10px;
+  background: var(--sticker-white);
+  color: var(--ink-body);
+  font-family: inherit;
+  font-weight: 800;
+  font-size: 14px;
+  box-shadow: var(--shadow-hard-2);
+}
+.chip:hover {
+  border-color: var(--border-tan);
+  color: var(--ink);
+}
+.chipOn {
+  border-color: var(--ink);
+  color: var(--ink);
+  background: var(--card);
+  box-shadow: none;
+  transform: translateY(2px);
+}
+
+/* ── stepper card: −  VALUE  + inside a white card ────────────────────────── */
+.stepCard {
+  margin-top: 10px;
+  background: var(--sticker-white);
+  border: 2px solid var(--border-tan-lt);
+  border-radius: var(--r-card);
+  padding: 10px 12px;
+}
+.stepRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+}
+.stepValue {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 22px;
+}
+
+/* ── the add-a-name row ───────────────────────────────────────────────────── */
+.addRow {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+.addInput {
+  flex: 1;
+}
+
+/* ── roster list (a cream inset the rows sit on) ──────────────────────────── */
+.list {
+  margin-top: 14px;
+  background: var(--card);
+  border-radius: 10px;
+  padding: 2px 10px;
+}
+/* touch-action:none so a drag on the handle reorders instead of scrolling the page. */
+.handle {
+  touch-action: none;
+  cursor: grab;
+}
+.handleDrag {
+  cursor: grabbing;
+}
+/* Blue ring round the row being moved — same accent the focus/selection system already uses. */
+.dragging {
+  outline: 2px solid var(--blue);
+  outline-offset: -2px;
+  border-radius: 8px;
+}
+
+/* Bare 44px square button — the drag handle and the ✕. */
+.bareBtn {
+  display: grid;
+  place-items: center;
+  width: var(--tap);
+  height: var(--tap);
+  border: none;
+  border-radius: 10px;
+  background: none;
+  color: var(--ink-body);
+  font-size: 18px;
+  font-weight: 800;
+  flex: none;
+}
+.bareBtn:hover {
+  color: var(--ink);
+  background: rgba(43, 36, 23, 0.05);
+}
+
+/* The player's sticker face as a small swatch — same gradient they wear everywhere else. */
+.faceDot {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  border: 2px solid var(--sticker-white);
+  box-shadow: var(--shadow-hard-2);
+  background: linear-gradient(178deg, var(--face-a), var(--face-b));
+  flex: none;
+}
+.rosterName {
+  flex: 1;
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The tag button is the row's whole position summary; dotted underline says "tap to edit". */
+.tagBtn {
+  max-width: 48%;
+  min-height: var(--tap);
+  border: none;
+  background: none;
+  padding: 0 4px;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 800;
+  color: var(--tan);
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+}
+.tagBtn:hover {
+  color: var(--ink);
+}
+.tagOn {
+  color: var(--ink);
+}
+
+/* ── teams index: each club is a large sticker card ───────────────────────── */
+.teamCard {
+  margin-top: 16px;
+  padding: 6px; /* the sticker border stock */
+}
+.teamFace {
+  display: block;
+  border-radius: 5px;
+  background: linear-gradient(178deg, var(--face-a), var(--face-b));
+  color: #fff;
+  text-align: center;
+  padding: 14px 10px 12px;
+  text-decoration: none;
+}
+.teamFace:hover {
+  text-decoration: none;
+  color: #fff;
+}
+.teamArt {
+  display: block;
+  font-size: 24px;
+  line-height: 1.2;
+}
+.teamName {
+  display: block;
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 20px;
+  letter-spacing: -0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.teamBody {
+  padding: 6px 6px 4px;
+}
+.teamMeta {
+  margin: 2px 0 4px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--tan);
+}
+.cardActions {
+  display: flex;
+  gap: 8px;
+  padding: 8px 0 2px;
+  border-top: 1px dotted var(--border-tan);
+  margin-top: 4px;
+}
+
+/* ── match dateline rows (index cards + the team hub) ─────────────────────── */
+.mList .mItem:first-child {
+  border-top: none;
+}
+.mItem {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border-top: 1px dotted var(--border-tan);
+}
+.mLink {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  min-height: var(--tap);
+  padding: 6px 2px;
+  color: inherit;
+  text-decoration: none;
+}
+.mLink:hover {
+  text-decoration: none;
+}
+.mLink:hover .mName {
+  color: var(--red);
+}
+.mWhen {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--tan);
+  white-space: nowrap;
+}
+.mName {
+  flex: 1;
+  min-width: 0;
+  font-size: 13.5px;
+  font-weight: 800;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.matchMain {
+  flex: 1;
+  min-width: 0;
+}
+.matchSub {
+  display: block;
+  margin-top: 1px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--tan);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mState {
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.mDone {
+  color: var(--green);
+}
+.mSetup {
+  color: var(--tan);
+}
+.mMore {
+  display: block;
+  padding: 6px 2px 2px;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--tan);
+  border-top: 1px dotted var(--border-tan);
+}
+
+/* ── team hub ─────────────────────────────────────────────────────────────── */
+.statStrip {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 14px;
+}
+.statCell {
+  background: var(--sticker-white);
+  border: 2px solid var(--border-tan-lt);
+  border-radius: 10px;
+  text-align: center;
+  padding: 10px 6px 8px;
+}
+.statValue {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 22px;
+  line-height: 1.1;
+}
+.statRed {
+  color: var(--red);
+}
+.squadGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 10px;
+}
+
+/* ── empty column ─────────────────────────────────────────────────────────── */
+.emptyBlock {
+  text-align: center;
+  padding: 16px 0 6px;
+}
+.emptyHed {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 20px;
+  color: var(--tan);
+}
+
+/* ── onboarding step badges (the 1-2-3 circles from the album spec) ───────── */
+.stepHeadRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 18px;
+}
+.stepBadge {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 15px;
+  box-shadow: var(--shadow-hard-2);
+  transform: rotate(var(--tilt, 0deg));
+  flex: none;
+}
+.stepBadgeRed {
+  background: var(--red);
+}
+.stepBadgeYellow {
+  background: var(--yellow);
+}
+
+/* ── footer ───────────────────────────────────────────────────────────────── */
+.foot {
+  margin-top: 24px;
+}
+.footRow {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.footNote {
+  margin: 10px 0 0;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tan);
+}
+.error {
+  margin: 10px 0 0;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--red);
+}
+.deadline {
+  margin: 28px 0 0;
+  text-align: center;
+  font-size: 12.5px;
+  font-weight: 800;
+  color: var(--tan);
+}
+.deadline a {
+  color: var(--tan);
+  /* inline-block padding so the small footer links still clear the 44px floor */
+  display: inline-block;
+  padding: 12px 6px;
+}
+.deadline a:hover {
+  color: var(--red);
+}
+.linkBtn {
+  border: none;
+  background: none;
+  padding: 12px 6px;
+  font: inherit;
+  color: var(--tan);
+  cursor: pointer;
+}
+.linkBtn:hover {
+  color: var(--red);
+}

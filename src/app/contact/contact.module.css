@@ -1,0 +1,43 @@
+/*
+ * The contact page — the enquiry form restyled as a sticker card: white stock, radius 12, soft
+ * shadow, the faint deterministic lean every card in the album carries.
+ */
+
+.hed {
+  margin: 20px 0 0;
+  font-size: 34px;
+  letter-spacing: -0.02em;
+}
+.hedRed {
+  color: var(--red);
+}
+.standfirst {
+  margin: 12px 0 0;
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--ink-body);
+}
+
+/* The form as a sticker card. The lean comes in via --tilt from tilt() — never a dice roll. */
+.card {
+  margin-top: 20px;
+  background: var(--sticker-white);
+  border-radius: var(--r-card);
+  padding: 16px;
+  box-shadow: var(--shadow-soft);
+  transform: rotate(var(--tilt, 0deg));
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.error {
+  margin-top: 14px;
+  background: var(--sticker-white);
+  border: 2px solid var(--red);
+  border-radius: 10px;
+  padding: 10px 12px;
+  color: var(--red);
+  font-weight: 700;
+  font-size: 14px;
+}

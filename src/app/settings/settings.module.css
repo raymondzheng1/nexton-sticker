@@ -1,0 +1,68 @@
+/*
+ * Settings — the house rules, one sticker card per group. Only settings-specific layout lives
+ * here; chips, fields and footers come from the teams module, chrome from the ui primitives.
+ */
+
+/* Applied over StickerFrame: a settings group is a white card with real padding inside. */
+.group {
+  margin-top: 8px;
+  padding: 12px 14px 14px;
+}
+
+/* The capability code — display type, but never displayed until the coach asks. */
+.codeValue {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 20px;
+  letter-spacing: 0.14em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Equal-column button grids (segmented pickers, the alert toggles). */
+.segGrid {
+  display: grid;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+/* The rotation-dial value, printed loud beside its label. */
+.sliderName {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 16px;
+  text-transform: uppercase;
+  color: var(--red);
+  white-space: nowrap;
+}
+
+/* The native range input: the element's own 44px box is the touch target; the global input skin
+   (white card, tan border) must not apply to a slider. */
+.slider {
+  width: 100%;
+  height: var(--tap);
+  min-height: var(--tap);
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  accent-color: var(--red);
+  cursor: pointer;
+}
+
+.btnRow {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+/* Loud failure surface — never silent. */
+.errorBox {
+  margin-top: 18px;
+  padding: 12px 14px;
+  border: 2px solid var(--red);
+  border-radius: 10px;
+  background: var(--sticker-white);
+  color: var(--red);
+  font-weight: 800;
+  font-size: 13.5px;
+}

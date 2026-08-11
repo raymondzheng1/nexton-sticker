@@ -1,0 +1,304 @@
+/*
+ * Report pages — the finished match page ("the swapsies note"), the season collection and the
+ * player card. Shared layout for the three read-only screens; all colour and chrome come from the
+ * global tokens and the src/ui primitives.
+ */
+
+/* ── headline ─────────────────────────────────────────────────────────────── */
+.hed {
+  font-size: 34px;
+  line-height: 1.02;
+  margin-top: 14px;
+}
+.hedRed {
+  color: var(--red);
+}
+
+/* ── stat tiles (white sticker cells) ─────────────────────────────────────── */
+.statGrid {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+}
+.statGrid3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+.statGrid4 {
+  grid-template-columns: repeat(4, 1fr);
+}
+.statCell {
+  background: var(--sticker-white);
+  border-radius: 10px;
+  box-shadow: var(--shadow-hard-2);
+  padding: 10px 4px;
+  text-align: center;
+  transform: rotate(var(--tilt, 0deg));
+}
+.statValue {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 22px;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.statValueRed {
+  color: var(--red);
+}
+.statLabel {
+  margin-top: 2px;
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--tan);
+}
+
+/* ── THE SWAPSIES NOTE (the receipt) ──────────────────────────────────────── */
+.receiptCard {
+  background: var(--sticker-white);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow-soft);
+  padding: 14px 16px;
+  margin-top: 18px;
+  transform: rotate(var(--tilt, 0deg));
+}
+.receiptTitle {
+  font-family: var(--font-hand);
+  font-weight: 600;
+  font-size: 22px;
+  color: var(--green);
+  line-height: 1.15;
+}
+.receipt {
+  margin: 8px 0 0;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.65;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.receiptVia {
+  color: var(--tan);
+}
+
+/* ── tables (box score, league table) ─────────────────────────────────────── */
+.tableHead {
+  display: grid;
+  gap: 8px;
+  align-items: baseline;
+  padding: 8px 2px 6px;
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tan);
+  border-bottom: 1px solid var(--border-tan);
+}
+.rowGrid {
+  display: grid;
+  gap: 8px;
+  align-items: center;
+  min-height: var(--tap);
+  padding: 6px 2px;
+  font-size: 14px;
+  border-bottom: 1px dotted var(--border-tan);
+  color: var(--ink);
+}
+.rowGridLast {
+  border-bottom: none;
+}
+.num {
+  text-align: right;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.cellName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 800;
+}
+.cellSub {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--tan);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tableFoot {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 2px 0;
+  font-size: 12.5px;
+  font-weight: 800;
+  color: var(--ink-body);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The little gradient face swatch beside a name — the player's sticker, in miniature. */
+.faceDot {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 2px solid var(--sticker-white);
+  box-shadow: 0 1px 2px rgba(43, 36, 23, 0.25);
+  vertical-align: -3px;
+  margin-right: 6px;
+  flex: none;
+}
+
+/* ── period chips (season page) ───────────────────────────────────────────── */
+.periodChips {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 14px;
+}
+.periodChip {
+  min-height: var(--tap);
+  border: 2px solid var(--border-tan-lt);
+  border-radius: 10px;
+  background: var(--sticker-white);
+  color: var(--ink-body);
+  font-family: inherit;
+  font-weight: 800;
+  font-size: 13px;
+}
+.periodChipOn {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+  box-shadow: var(--shadow-hard-2);
+}
+
+/* ── the player page's big sticker ────────────────────────────────────────── */
+.bigStickerRow {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  margin-top: 16px;
+}
+.bigSticker {
+  flex: none;
+  width: 132px;
+  background: var(--sticker-white);
+  border-radius: var(--r-sticker);
+  padding: 7px;
+  box-shadow: var(--shadow-soft);
+  transform: rotate(var(--tilt, 0deg));
+  text-align: center;
+}
+.bigFace {
+  border-radius: 5px;
+  padding: 16px 8px 12px;
+  color: #fff;
+  background: linear-gradient(178deg, var(--face-a), var(--face-b));
+}
+.bigArt {
+  display: block;
+  font-size: 36px;
+  line-height: 1.2;
+}
+.bigName {
+  display: block;
+  margin-top: 4px;
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 20px;
+  letter-spacing: -0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bigFoot {
+  padding: 5px 2px 1px;
+  font-weight: 800;
+  font-size: 13.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-body);
+}
+.bigAside {
+  min-width: 0;
+  padding-bottom: 6px;
+}
+
+/* ── charts and bars ──────────────────────────────────────────────────────── */
+.chartScroll {
+  overflow-x: auto;
+  margin-top: 10px;
+}
+.barRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 2px;
+  font-size: 13.5px;
+  border-bottom: 1px dotted var(--border-tan);
+}
+.barRowLast {
+  border-bottom: none;
+}
+.barLabel {
+  width: 108px;
+  flex: none;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.barMins {
+  width: 44px;
+  flex: none;
+  text-align: right;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── match-by-match list ──────────────────────────────────────────────────── */
+.matchRow {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 10px 2px;
+  font-size: 13.5px;
+  border-bottom: 1px dotted var(--border-tan);
+}
+.matchRowLast {
+  border-bottom: none;
+}
+.matchDate {
+  width: 44px;
+  flex: none;
+  font-weight: 800;
+  color: var(--tan);
+  font-variant-numeric: tabular-nums;
+}
+.matchMins {
+  width: 40px;
+  flex: none;
+  text-align: right;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.matchDetail {
+  flex: 1;
+  min-width: 0;
+  color: var(--ink-body);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── shared buttons row ───────────────────────────────────────────────────── */
+.btnRow {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}

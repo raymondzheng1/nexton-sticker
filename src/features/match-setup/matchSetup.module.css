@@ -1,0 +1,373 @@
+/* Match-setup — "The line-up page" of the album.
+ *
+ * Each step is a card stuck on the paper with a numbered circle badge (the marketing page's 1-2-3
+ * language). The squad is picked by tapping stickers in and out of the album grid; the plan review
+ * is the album pitch + the editable timeline, with the foil frame reserved — as everywhere — for
+ * the ONE rare card: the next suggested change. All colours are tokens; all rotations come through
+ * tilt() as a --tilt custom property. */
+
+.title {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 30px;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  margin: 0;
+}
+
+/* ── numbered step cards ──────────────────────────────────────────────────── */
+.step {
+  display: flex;
+  gap: 12px;
+  margin-top: 26px;
+}
+.stepBadge {
+  width: 34px;
+  height: 34px;
+  flex: none;
+  margin-top: 2px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-weight: 900;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  box-shadow: var(--shadow-hard-2);
+  transform: rotate(var(--tilt, 0deg));
+}
+.badgeRed {
+  background: var(--red);
+}
+.badgeYellow {
+  background: var(--yellow);
+}
+.badgeGreen {
+  background: var(--green);
+}
+.badgeBlue {
+  background: var(--blue);
+}
+.badgePurple {
+  background: var(--purple);
+}
+.stepBody {
+  flex: 1;
+  min-width: 0;
+}
+.stepTitle {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 4px 0 0;
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 19px;
+  letter-spacing: -0.01em;
+}
+.stepAside {
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tan);
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── step 1: the squad grid ───────────────────────────────────────────────── */
+.squadGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px 10px;
+  margin-top: 12px;
+}
+.cell {
+  position: relative;
+  min-width: 0;
+}
+/* A player marked OUT: the sticker greys and loosens its grip on the page. */
+.out {
+  filter: grayscale(1);
+  opacity: 0.5;
+}
+/* The coach's margin note over a 🕑 sticker. */
+.lateNote {
+  position: absolute;
+  top: -12px;
+  right: -2px;
+  z-index: 1;
+  pointer-events: none;
+}
+
+/* ── flag rows (🔒 always on / 🕑 late) ───────────────────────────────────── */
+.flagRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  padding: 8px 0;
+  border-bottom: 1px dotted var(--border-tan);
+}
+.flagRowLast {
+  border-bottom: none;
+}
+.flagName {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.flagBtns {
+  display: flex;
+  gap: 6px;
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+/* Toggle chips — white mini-stickers, pressed red when on (the dial's grammar). */
+.chip {
+  min-height: var(--tap);
+  padding: 0 12px;
+  border: 2px solid var(--border-tan-lt);
+  border-radius: var(--r-pill);
+  background: var(--sticker-white);
+  color: var(--ink-body);
+  font-family: var(--font-sans);
+  font-weight: 800;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.chip:hover {
+  border-color: var(--border-tan);
+  color: var(--ink);
+}
+.chipOn {
+  background: var(--red);
+  border-color: var(--red);
+  color: #fff;
+  box-shadow: var(--shadow-hard-2);
+}
+
+/* ── step 2: the format card ──────────────────────────────────────────────── */
+.formatCard {
+  margin-top: 12px;
+  padding: 4px 12px;
+}
+.formatRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px dotted var(--border-tan);
+}
+.formatRowLast {
+  border-bottom: none;
+}
+.stepperVal {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 19px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  min-width: 44px;
+  text-align: center;
+}
+.stepperBtns {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+
+/* ── folds (details) — the dashed "spare pocket" of the album page ────────── */
+.fold {
+  border: 3px dashed var(--border-tan);
+  border-radius: var(--r-card);
+  margin-top: 14px;
+}
+.foldHead {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 48px;
+  padding: 0 12px;
+  cursor: pointer;
+}
+.foldHead::-webkit-details-marker {
+  display: none;
+}
+.foldTitle {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 14.5px;
+}
+.foldSum {
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tan);
+  text-align: right;
+}
+.foldBody {
+  padding: 2px 12px 14px;
+  border-top: 1px dotted var(--border-tan);
+}
+
+/* ── the plan step ────────────────────────────────────────────────────────── */
+/* "Can't pick a line-up" — the whole plan is the missing sticker until the squad works. */
+.planError {
+  border: 3px dashed var(--red-deep);
+  border-radius: var(--r-card);
+  background: color-mix(in srgb, var(--red) 6%, transparent);
+  padding: 14px;
+  margin-top: 14px;
+}
+.planErrorTitle {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 16px;
+  color: var(--red-deep);
+}
+.planErrorBody {
+  margin: 6px 0 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--ink-body);
+}
+
+.warn {
+  color: var(--red-deep);
+  font-weight: 700;
+}
+
+/* The bench: same album grid as the squad, one line of spares. */
+.benchGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px 10px;
+  margin-top: 10px;
+}
+
+/* ── the foil "next change" card innards ──────────────────────────────────── */
+.nextHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.nextLabel {
+  font-size: 13.5px;
+  font-weight: 800;
+  color: var(--tan);
+}
+.nextWhen {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 21px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.nextSwap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  background: var(--card);
+  border-radius: 10px;
+  padding: 9px 10px;
+  margin-top: 8px;
+  font-size: 14.5px;
+  font-weight: 800;
+}
+.offInk {
+  color: var(--red-deep);
+}
+.onInk {
+  color: var(--green);
+}
+.nextPos {
+  margin-left: auto;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--tan);
+}
+
+/* ── the subbing sheet (paper grid, does its own adding up) ───────────────── */
+.sheetWrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin-top: 10px;
+  border-radius: 10px;
+}
+.sheetTable {
+  border-collapse: collapse;
+  min-width: 100%;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  background: var(--card);
+}
+.sheetTable th,
+.sheetTable td {
+  border: 1px solid var(--border-tan-lt);
+  padding: 6px 8px;
+  text-align: center;
+  white-space: nowrap;
+}
+.sheetName {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--card);
+  text-align: left !important;
+  font-weight: 800;
+  max-width: 96px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+}
+.sheetHead th {
+  background: var(--card);
+  font-weight: 800;
+  color: var(--tan);
+}
+.sheetOn {
+  background: color-mix(in srgb, var(--green) 14%, transparent);
+  color: var(--green-dark);
+  font-weight: 800;
+}
+/* A new period starts here — the sheet's "1ST / 2ND" column break. */
+.sheetPeriod {
+  border-left: 3px solid var(--border-tan) !important;
+}
+.sheetTotal {
+  font-weight: 800;
+}
+
+/* ── the sticky kick-off bar ──────────────────────────────────────────────── */
+.barCol {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+.barNote {
+  margin: 0;
+  text-align: center;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--ink-body);
+}
