@@ -5,6 +5,7 @@
  * delivered), and the full body reaching the sender untouched.
  */
 import { describe, expect, it } from "vitest";
+import { APP_FULL_NAME } from "../../src/appIdentity";
 import {
   ACTIVITY_TYPES,
   handleActivityRequest,
@@ -34,6 +35,9 @@ describe("contact handler — spam layers + delivery", () => {
     expect(res.status).toBe(200);
     expect(sent).toHaveLength(1);
     expect(sent[0]!.subject).toContain("Sam");
+    // Three sibling apps share one inbox — subject AND body must say which app this came from.
+    expect(sent[0]!.subject.startsWith(`${APP_FULL_NAME} enquiry`)).toBe(true);
+    expect(sent[0]!.text).toContain(`via ${APP_FULL_NAME}`);
     expect(sent[0]!.text).toContain(message.trim()); // FULL body delivered — never truncated
     expect(sent[0]!.replyTo).toBe("sam@example.com");
   });
@@ -79,7 +83,7 @@ describe("activity handler — operator pings", () => {
     const { sent, send } = capturingSender();
     const res = await handleActivityRequest({ type: "team_created", detail: "Lakers · basketball · 8 players" }, send);
     expect(res.status).toBe(200);
-    expect(sent[0]!.subject).toBe("NextOn · Team created");
+    expect(sent[0]!.subject).toBe(`${APP_FULL_NAME} · Team created`);
     expect(sent[0]!.text).toBe("Lakers · basketball · 8 players");
   });
 
@@ -105,7 +109,7 @@ describe("activity handler — operator pings", () => {
       const res = await handleActivityRequest({ type }, send);
       expect(res.status).toBe(200);
       const subject = sent[0]!.subject;
-      expect(subject.startsWith("NextOn · ")).toBe(true);
+      expect(subject.startsWith(`${APP_FULL_NAME} · `)).toBe(true);
       // A label, not the raw enum key leaking into the operator's inbox.
       expect(subject).not.toContain("_");
     }
@@ -152,7 +156,7 @@ describe("resendSenderFromEnv — env handling learned from the outage", () => {
       const sender = resendSenderFromEnv(impl);
       expect(sender).not.toBeNull();
       await sender!({ subject: "s", text: "t" });
-      expect((calls[0]!.body as { from: string }).from).toBe("NextOn <onboarding@resend.dev>");
+      expect((calls[0]!.body as { from: string }).from).toBe(`${APP_FULL_NAME} <onboarding@resend.dev>`);
     });
   });
 
@@ -162,7 +166,7 @@ describe("resendSenderFromEnv — env handling learned from the outage", () => {
       const sender = resendSenderFromEnv(impl);
       expect(sender).not.toBeNull();
       await sender!({ subject: "s", text: "t" });
-      expect((calls[0]!.body as { from: string }).from).toBe("NextOn <onboarding@resend.dev>");
+      expect((calls[0]!.body as { from: string }).from).toBe(`${APP_FULL_NAME} <onboarding@resend.dev>`);
     });
   });
 

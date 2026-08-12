@@ -12,6 +12,7 @@
  * boundary is handler ↔ dependency), so tests exercise the real logic with a capturing fake.
  */
 import { z } from "zod";
+import { APP_FULL_NAME } from "@/appIdentity";
 
 export interface EmailMessage {
   subject: string;
@@ -56,7 +57,8 @@ export function resendSenderFromEnv(fetchImpl: typeof fetch = fetch): EmailSende
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        from: from ?? "NextOn <onboarding@resend.dev>",
+        // The display name is per-app (three siblings share one inbox) even on the sandbox address.
+        from: from ?? `${APP_FULL_NAME} <onboarding@resend.dev>`,
         to: [to],
         subject: msg.subject,
         text: msg.text,
@@ -119,8 +121,8 @@ export async function handleContactRequest(
   const name = data.name?.trim();
   const email = data.email?.trim();
   await send({
-    subject: `NextOn enquiry${name ? ` from ${name}` : ""}`,
-    text: `${message}\n\n— ${name || "(no name given)"}${email ? ` · ${email}` : " · (no reply email given)"}`,
+    subject: `${APP_FULL_NAME} enquiry${name ? ` from ${name}` : ""}`,
+    text: `${message}\n\n— ${name || "(no name given)"}${email ? ` · ${email}` : " · (no reply email given)"}\nvia ${APP_FULL_NAME}`,
     replyTo: email || undefined,
   });
   return { status: 200, body: { ok: true } };
@@ -166,7 +168,7 @@ const ACTIVITY_LABELS: Record<ActivityType, string> = {
 
 export async function handleActivityRequest(data: ActivityRequest, send: EmailSender): Promise<HandlerResult> {
   await send({
-    subject: `NextOn · ${ACTIVITY_LABELS[data.type]}`,
+    subject: `${APP_FULL_NAME} · ${ACTIVITY_LABELS[data.type]}`,
     text: data.detail?.trim() || "(no detail)",
   });
   return { status: 200, body: { ok: true } };
