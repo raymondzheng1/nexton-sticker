@@ -270,10 +270,6 @@
   line-height: 1.5;
   color: var(--ink-body);
 }
-.privacyLink {
-  white-space: nowrap;
-}
-
 /* ── 8 · footer CTA ─────────────────────────────────────────────────────────── */
 .footer {
   padding: 30px 20px calc(42px + env(safe-area-inset-bottom));

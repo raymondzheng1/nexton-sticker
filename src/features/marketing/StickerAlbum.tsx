@@ -245,11 +245,10 @@ export function StickerAlbum() {
       {/* ── 7 · offline card ── */}
       <section className={album.offline}>
         <div className={album.offlineHead}>No wifi at the pitch? Perfect.</div>
+        {/* No "Privacy →" link here: there is no privacy PAGE, and a link promising one reads as
+            broken (owner report, 2026-08-12). The honest privacy note prints in the footer below. */}
         <p className={album.offlineBody}>
-          Works fully offline. No accounts, no ads — your squad stays on your phone.{" "}
-          <a href="#privacy" className={album.privacyLink}>
-            Privacy →
-          </a>
+          Works fully offline. No accounts, no ads — your squad stays on your phone.
         </p>
       </section>
 
@@ -265,7 +264,7 @@ export function StickerAlbum() {
           Questions or ideas?{" "}
           <Link href="/contact">Contact the developer →</Link>
         </p>
-        <p className={album.privacyNote} id="privacy">
+        <p className={album.privacyNote}>
           <strong>Privacy:</strong> NextOn stores first names only — no surnames, no photos, no ads.
           Your squad lives in your phone&apos;s own storage and works without a network; a private
           team code syncs your own devices when you want it to, and you can export or delete

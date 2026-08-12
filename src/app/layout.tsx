@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Archivo, Caveat } from "next/font/google";
 import { Providers } from "./Providers";
+import { RegisterSW } from "@/features/pwa/RegisterSW";
 import "./globals.css";
 
 /**
@@ -46,6 +47,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={`${archivo.variable} ${caveat.variable}`}>
       <body>
         <Providers>{children}</Providers>
+        {/* public/sw.js shipped from day one but was never registered — offline launch
+            silently never engaged. Found by the 2026-08-12 link/asset audit. */}
+        <RegisterSW />
       </body>
     </html>
   );

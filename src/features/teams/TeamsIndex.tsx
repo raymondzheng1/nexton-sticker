@@ -49,7 +49,10 @@ export function TeamsIndex() {
 
   /** Native share sheet on a phone, clipboard on a desktop, a visible link if both are blocked. */
   async function share(): Promise<void> {
-    const url = window.location.origin;
+    // /welcome is the permanent marketing page: a recipient must land on the pitch, not on
+    // whatever "/" resolves to for THEM. Matches the original's useShareApp and this app's
+    // own settings-page share, from which this copy had drifted (2026-08-12 audit).
+    const url = `${window.location.origin}/welcome`;
     if (typeof navigator.share === "function") {
       try {
         await navigator.share({ title: "NextOn", text: SHARE_TEXT, url });

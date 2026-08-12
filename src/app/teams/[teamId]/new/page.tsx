@@ -431,8 +431,8 @@ export default function NewMatchPage() {
         <div className={styles.gutter}>
           <p className={styles.empty}>{ready ? "That team isn’t in the album." : "Fetching the team sheet…"}</p>
           {ready && (
-            <HardButtonLink href="/" variant="outline">
-              Back to the album
+            <HardButtonLink href="/teams" variant="outline">
+              Back to your albums
             </HardButtonLink>
           )}
         </div>

@@ -257,6 +257,26 @@ export interface PlayerStickerProps {
  * A player as a sticker: white frame, gradient face with their name (and art at grid size), and a
  * white footer strip carrying live minutes + fairness status — glyph + word + colour, all three.
  */
+
+/**
+ * Name-first sizing for sticker faces: a long first name steps DOWN in size before it is ever
+ * ellipsized, because "Charlotte" at 11.5px beats "Charl…" at 15px — the owner's call
+ * (2026-08-12): show the full name whenever possible, "…" only for the truly unreasonable.
+ * 11.5px is the design's sanctioned floor; below that the CSS ellipsis takes over.
+ */
+function nameSizePx(name: string, mini: boolean): number {
+  const n = name.length;
+  // Steps measured against the real face widths (~73px grid, narrower minis) with 900-weight
+  // type: an 11-char "Bartholomew" needs the floor size to fit un-clipped.
+  if (mini) return n <= 6 ? 13.5 : n <= 8 ? 12.5 : 11.5;
+  return n <= 6 ? 15 : n <= 8 ? 13.5 : n <= 10 ? 12.5 : 11.5;
+}
+
+/** Below the size floor the only lever left is tracking: tuck long names in before "…" fires. */
+function nameSpacing(name: string): string | undefined {
+  return name.length >= 11 ? "-0.04em" : undefined;
+}
+
 export function PlayerSticker({
   playerId,
   name,
@@ -292,7 +312,7 @@ export function PlayerSticker({
             {art}
           </span>
         )}
-        <span className={cx(styles.psName, mini && styles.psNameMini)}>
+        <span className={cx(styles.psName, mini && styles.psNameMini)} style={{ fontSize: nameSizePx(name, mini), letterSpacing: nameSpacing(name) }}>
           {mini && gk ? "🧤 " : ""}
           {name}
           {scoreMark ? ` ${scoreMark}` : ""}
@@ -371,7 +391,9 @@ export function MissingSlot({
   const lean = tiltDeg ?? tilt(name, 1.5);
   const body = (
     <>
-      <span className={styles.missingName}>{name}</span>
+      <span className={styles.missingName} style={{ fontSize: nameSizePx(name, false), letterSpacing: nameSpacing(name) }}>
+        {name}
+      </span>
       {detail !== undefined && <span className={styles.missingDetail}>{detail}</span>}
       {note !== undefined && <span className={styles.missingNote}>{note}</span>}
     </>
