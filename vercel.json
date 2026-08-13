@@ -1,4 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "crons": [{ "path": "/api/keepwarm", "schedule": "*/10 * * * *" }]
+  "redirects": [
+    {
+      "source": "/:path*",
+      "destination": "https://nexton-taupe.vercel.app/:path*",
+      "permanent": false
+    }
+  ]
 }
