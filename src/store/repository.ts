@@ -83,6 +83,10 @@ export interface Repository {
   createMatch(input: CreateMatchInput): Promise<SavedMatch>;
   updateMatch(id: string, patch: MatchPatch): Promise<SavedMatch>;
   deleteMatch(id: string): Promise<void>;
+  /** Clear a delete tombstone (deletes are never erasures). Null if the id is unknown. */
+  restoreMatch(id: string): Promise<SavedMatch | null>;
+  /** Tombstoned matches, newest deletion first. */
+  listDeletedMatches(teamId?: string): Promise<SavedMatch[]>;
   appendEvent(matchId: string, event: MatchEvent): Promise<SavedMatch>;
   /** Clear the event log + clock back to pre-match (keeps config, squad, and the confirmed XI). */
   resetMatch(id: string): Promise<SavedMatch>;
@@ -237,6 +241,33 @@ export class SnapshotRepository implements Repository {
     match.deletedAt = now();
     match.updatedAt = match.deletedAt;
     await this.persist(snap);
+  }
+
+  /**
+   * Undo a delete. Deletion here has always been a TOMBSTONE (deletedAt), never an erasure — every
+   * event, minute and score stays in the snapshot — so restoring is just clearing the stamp. Added
+   * after a coach mis-tapped ✕ on a LIVE match from the team page (2026-08-16): the ✕ sat 2px from
+   * the row you tap to reopen, the native confirm was reflex-dismissed, and the match "vanished"
+   * mid-game with no way back even though nothing was actually lost. `updatedAt` bumps so the
+   * restore wins last-writer-wins on sync.
+   */
+  async restoreMatch(id: string): Promise<SavedMatch | null> {
+    const snap = await this.ensureLoaded();
+    const match = snap.matches.find((m) => m.id === id);
+    if (!match || match.deletedAt === null) return match ? clone(match) : null;
+    match.deletedAt = null;
+    match.updatedAt = now();
+    await this.persist(snap);
+    return clone(match);
+  }
+
+  /** Recently deleted matches (newest deletion first) — the recovery bin the team page shows. */
+  async listDeletedMatches(teamId?: string): Promise<SavedMatch[]> {
+    const snap = await this.ensureLoaded();
+    return snap.matches
+      .filter((m) => m.deletedAt !== null && (teamId === undefined || m.teamId === teamId))
+      .sort((a, b) => (b.deletedAt ?? "").localeCompare(a.deletedAt ?? ""))
+      .map(clone);
   }
 
   async appendEvent(matchId: string, event: MatchEvent): Promise<SavedMatch> {

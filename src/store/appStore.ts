@@ -75,7 +75,10 @@ interface AppState {
   deleteTeam: (id: string) => Promise<void>;
   createMatch: (input: CreateMatchInput) => Promise<SavedMatch>;
   deleteMatch: (id: string) => Promise<void>;
+  /** Undo a delete — deletes are tombstones, so a mis-tapped ✕ is always recoverable. */
+  restoreMatch: (id: string) => Promise<SavedMatch | null>;
   listMatches: (teamId?: string) => Promise<SavedMatch[]>;
+  listDeletedMatches: (teamId?: string) => Promise<SavedMatch[]>;
   setPrefs: (patch: Partial<MatchPrefs>) => void;
   /** Activate a capability code. `opts.created` distinguishes minting a new one from linking an
    *  existing one on another device (drives which operator ping fires). */
@@ -168,7 +171,15 @@ export const useAppStore = create<AppState>((set, get) => {
       scheduleSync();
     },
 
+    restoreMatch: async (id) => {
+      const restored = await getRepo().restoreMatch(id);
+      get().bumpMatchRev();
+      scheduleSync();
+      return restored;
+    },
+
     listMatches: (teamId) => getRepo().listMatches(teamId),
+    listDeletedMatches: (teamId) => getRepo().listDeletedMatches(teamId),
 
     setCode: async (rawCode, opts) => {
       const code = normalizeCapabilityCode(rawCode);
