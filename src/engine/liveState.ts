@@ -5,6 +5,7 @@
  * restore) and powers undo (drop the last event, refold). The engine never reads a clock — the
  * caller supplies elapsed deltas via TICK events.
  */
+import { BREAK_REST_CREDIT_SECONDS } from "./constants";
 import { invariant } from "./errors";
 import type {
   LiveState,
@@ -28,6 +29,7 @@ export function initLiveState(match: Match, players: Player[]): LiveState {
       secondsAsGk: 0,
       secondsBySlot: {},
       secondsThisStint: 0,
+      secondsThisRest: 0,
       // Always-on players (not part of the rotation) start LOCKED — never planned/suggested off
       // (invariant #3). The coach can still Release them live.
       locked: p.alwaysOn === true,
@@ -95,7 +97,10 @@ export function applyEvent(state: LiveState, event: MatchEvent): LiveState {
       if (state.status !== "running") return next;
       next.elapsedSeconds = state.elapsedSeconds + event.deltaSeconds;
       for (const ps of Object.values(next.players)) {
-        if (!ps.onField) continue;
+        if (!ps.onField) {
+          ps.secondsThisRest += event.deltaSeconds; // resting — the bench clock runs too
+          continue;
+        }
         ps.secondsOnField += event.deltaSeconds;
         ps.secondsThisStint += event.deltaSeconds;
         if (ps.currentSlot === "GK") ps.secondsAsGk += event.deltaSeconds;
@@ -129,9 +134,14 @@ export function applyEvent(state: LiveState, event: MatchEvent): LiveState {
       // we?" question is measured from. The coach may have ended the last one early, so this is not
       // necessarily (period − 1) × periodLength (see LiveState.periodStartedAtSeconds).
       next.periodStartedAtSeconds = event.atSeconds;
-      // A new period is a fresh stint window (half-time rest resets just-subbed protection).
+      // A break rests the BENCH: everyone sitting out comes back fully rested, whatever the clock
+      // said a moment ago. It does NOT re-protect the pitch — the old reset of every on-field stint
+      // to zero meant nobody could come off until the stint floor had passed AGAIN after every
+      // restart, which with a real rotation floor locked up most of a short quarter and let the
+      // squad drift apart (found by the short-match trace, 2026-08-17). A player who was on for
+      // ten minutes before the break is due off, not freshly protected.
       for (const ps of Object.values(next.players)) {
-        if (ps.onField) ps.secondsThisStint = 0;
+        if (!ps.onField) ps.secondsThisRest = Math.max(ps.secondsThisRest, BREAK_REST_CREDIT_SECONDS);
       }
       return next;
     }
@@ -147,6 +157,7 @@ export function applyEvent(state: LiveState, event: MatchEvent): LiveState {
         ps.onField = false;
         ps.currentSlot = null;
         ps.secondsThisStint = 0;
+        ps.secondsThisRest = 0; // the rest starts now
       }
       for (const on of event.on) {
         const ps = requirePlayer(next, on.playerId);

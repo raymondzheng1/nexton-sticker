@@ -17,7 +17,14 @@ import {
   subFrequencyMinStintScale,
   subFrequencyMultiplier,
 } from "./constants";
-import { benchEligibleNow, isStartableAtKickoff, minStintSeconds } from "./candidates";
+import {
+  benchRestedNow,
+  effectiveFloors,
+  isStartableAtKickoff,
+  rotationCostSeconds,
+  rotationFloors,
+  type RotationFloors,
+} from "./candidates";
 import { invariant } from "./errors";
 import { computeTargets, debtMap } from "./fairness";
 import { getFormation } from "./formations";
@@ -90,11 +97,10 @@ export function chooseStartingLineup(
   // can fill starting slots (late arrivals become bench-eligible once their minute passes; see
   // benchEligibleNow).
   const kickoffPool = available.filter(isStartableAtKickoff);
-  invariant(
-    kickoffPool.length >= match.onFieldCount,
-    "not enough players available at kickoff to field a full team",
-    { availableAtKickoff: kickoffPool.length, onFieldCount: match.onFieldCount },
-  );
+  // SHORT-HANDED is the coach's call, not the engine's (owner decision 2026-08-17): a 9-a-side
+  // with eight players kicks off with eight. Slots fill in formation order (GK, defence, midfield,
+  // attack), so the unfilled slots are the furthest forward, which is how a short side lines up.
+  const shortBy = Math.max(0, match.onFieldCount - kickoffPool.length);
 
   const slots = formation.slots;
   const assignment = new Map<number, string>(); // slotIndex → playerId
@@ -142,21 +148,32 @@ export function chooseStartingLineup(
   }
 
   // 3) fill remaining slots by best fit, tie-broken by carry-forward (who's owed a start).
+  let unfilled = 0;
   for (let i = 0; i < slots.length; i++) {
     if (assignment.has(i)) continue;
     const slot = slots[i] as PositionSlot;
     const candidate = kickoffPool
       .filter((p) => !used.has(p.id) && canFillSlot(p, slot))
       .sort(byDesc((p) => positionFit(p, slot) * 1000 + startBias(p.id) / SECONDS_PER_MINUTE, (p) => p.id))[0];
-    invariant(candidate !== undefined, "could not fill a starting slot", { slot, index: i });
+    if (candidate === undefined) {
+      unfilled++;
+      continue; // short-handed: this slot stays empty (see shortBy)
+    }
     assignment.set(i, candidate.id);
     used.add(candidate.id);
   }
+  // A slot left empty for any reason OTHER than being short of players is still a real failure.
+  invariant(unfilled <= shortBy, "could not fill a starting slot", {
+    unfilled,
+    shortBy,
+    onFieldCount: match.onFieldCount,
+  });
 
-  const assignments: LineupAssignment[] = slots.map((slot, i) => {
-    const playerId = assignment.get(i) as string;
+  const assignments: LineupAssignment[] = slots.flatMap((slot, i) => {
+    const playerId = assignment.get(i);
+    if (playerId === undefined) return [];
     const p = byId.get(playerId) as Player;
-    return { slot, playerId, positionFit: positionFit(p, slot) };
+    return [{ slot, playerId, positionFit: positionFit(p, slot) }];
   });
   const bench = available.filter((p) => !used.has(p.id)).map((p) => p.id);
   return { assignments, bench };
@@ -234,6 +251,7 @@ function runSimulation(
   const total = totalMatchSeconds(match);
   const boundaries = new Set(periodBoundaries(match));
   const rotationSet = new Set(rotationWindowSec);
+  const floors = rotationFloors(match, players);
 
   let state = startState;
   let cursor = state.elapsedSeconds;
@@ -266,7 +284,7 @@ function runSimulation(
       forceGk(match, byId, state, t, acc, reserved);
     }
     if (isOuterRotation && rotationSet.has(t)) {
-      decideOutfieldSwaps(match, byId, state, debts, t, acc, reserved, hysteresisSeconds, minStintOverrideSec);
+      decideOutfieldSwaps(match, byId, state, debts, t, acc, reserved, hysteresisSeconds, floors, minStintOverrideSec);
     }
 
     if (off.length > 0 || on.length > 0 || positionChanges.length > 0) {
@@ -294,6 +312,23 @@ interface SwapAccumulator {
   positionChanges?: PositionChange[];
 }
 
+/**
+ * Fairness ordering with rotation tie-breaks. Debts within one hysteresis band of each other are
+ * treated as EQUAL (the band is the engine's own definition of "not meaningfully different"), and
+ * inside a band the rotation decides: the longest-on player comes off first, the longest-rested
+ * bench player comes on first. Fairness still leads; this only stops the engine shuttling whoever
+ * happens to be 20 seconds more owed.
+ */
+function debtBand(debtSec: number, hysteresisSeconds: number): number {
+  return Math.round(debtSec / Math.max(HYSTERESIS_SECONDS, hysteresisSeconds));
+}
+function restKey(ps: PlayerLiveState): number {
+  return ps.secondsOnField === 0 ? Number.MAX_SAFE_INTEGER : ps.secondsThisRest; // never played = freshest
+}
+function idOrder(a: PlayerLiveState, b: PlayerLiveState): number {
+  return a.playerId < b.playerId ? -1 : a.playerId > b.playerId ? 1 : 0;
+}
+
 /** Greedy fairness pairing: most over-played off ↔ most under-played on, respecting positions. */
 function decideOutfieldSwaps(
   match: Match,
@@ -304,10 +339,15 @@ function decideOutfieldSwaps(
   acc: SwapAccumulator,
   reserved: Set<string>,
   hysteresisSeconds: number,
+  floors: RotationFloors,
   minStintOverrideSec?: number,
 ): void {
   const gkExcluded = match.gkPolicy === "fixedGK" || match.gkPolicy === "rotateSeparately";
-  const minStint = minStintOverrideSec ?? minStintSeconds(match);
+  const now = effectiveFloors(floors, nowSec);
+  // The rotation floor owns the stint length (it already includes the slider's relaxation); an
+  // explicit override can only ever tighten it.
+  const minStint = Math.max(minStintOverrideSec ?? 0, now.minStintSec);
+  const debtOf = (ps: PlayerLiveState): number => debts.get(ps.playerId) ?? 0;
 
   const offCandidates = onFieldIds(state)
     .map((id) => state.players[id])
@@ -320,11 +360,21 @@ function decideOutfieldSwaps(
         !reserved.has(ps.playerId) &&
         !(gkExcluded && ps.currentSlot === "GK"),
     )
-    .sort(byAsc((ps) => debts.get(ps.playerId) ?? 0, (ps) => ps.playerId));
+    .sort(
+      (a, b) =>
+        debtBand(debtOf(a), hysteresisSeconds) - debtBand(debtOf(b), hysteresisSeconds) ||
+        b.secondsThisStint - a.secondsThisStint ||
+        idOrder(a, b),
+    );
 
-  const benchPool = benchEligibleNow(match, byId, state, nowSec)
+  const benchPool = benchRestedNow(match, byId, state, nowSec, now.minRestSec)
     .filter((ps) => !reserved.has(ps.playerId))
-    .sort(byDesc((ps) => debts.get(ps.playerId) ?? 0, (ps) => ps.playerId));
+    .sort(
+      (a, b) =>
+        debtBand(debtOf(b), hysteresisSeconds) - debtBand(debtOf(a), hysteresisSeconds) ||
+        restKey(b) - restKey(a) ||
+        idOrder(a, b),
+    );
 
   const usedBench = new Set<string>();
   const maxSwaps = Math.min(offCandidates.length, benchPool.length);
@@ -337,11 +387,14 @@ function decideOutfieldSwaps(
     if (!cand) continue;
     const offDebt = debts.get(offPs.playerId) ?? 0;
     const onDebt = debts.get(cand.playerId) ?? 0;
-    // Only swap when the incoming player is meaningfully more owed than the outgoing — net
-    // fairness improvement (avoids churn near equilibrium). Lists are sorted, so once the best
-    // available pair fails this test, no later pair passes either. The margin narrows as the coach
-    // asks for more frequent changes (see hysteresisSecondsFor).
-    if (onDebt - offDebt <= hysteresisSeconds) break;
+    // Only swap when the incoming player is meaningfully more owed than the outgoing — a net
+    // fairness improvement (avoids churn near equilibrium) — AND the gain covers what the swap
+    // costs the rotation (cutting a stint or a rest short of target; see rotationCostSeconds).
+    // The cost is per pair, so a failing pair is skipped rather than ending the window: the next
+    // pair may be a long-stint player for a well-rested one with a smaller gain that IS worth it.
+    // The margin narrows as the coach asks for more frequent changes (see hysteresisSecondsFor).
+    const cost = rotationCostSeconds(floors, offPs, cand, nowSec, match.fairnessToleranceMinutes * SECONDS_PER_MINUTE);
+    if (onDebt - offDebt <= hysteresisSeconds + cost) continue;
 
     const candPlayer = byId.get(cand.playerId) as Player;
     acc.off.push(offPs.playerId);
@@ -529,6 +582,16 @@ function makePlan(match: Match, players: Player[], sim: SimResult): SubPlan {
 const STABILITY_MIN_PERIOD_MINUTES = 10;
 const STABILITY_HOLD_SECONDS = 4 * SECONDS_PER_MINUTE;
 
+/** Drop any window closer to the previous kept one than `gapSec` (times are ascending). */
+function enforceMinGap(times: number[], gapSec: number): number[] {
+  const out: number[] = [];
+  for (const t of times) {
+    const last = out[out.length - 1];
+    if (last === undefined || t - last >= gapSec) out.push(t);
+  }
+  return out;
+}
+
 /** Push generated window times out of each period's opening hold; dedupe + drop past-full-time. */
 function applyStabilityHold(match: Match, times: number[], total: number): number[] {
   // Coach opted for even subbing from the first minute — skip the hold entirely.
@@ -638,11 +701,21 @@ function planContinuous(
   // the slider so "more changes" isn't silently capped (see plannerMinStintMinutes).
   const minStintMin = plannerMinStintMinutes(match);
   const minStintSec = minStintMin * SECONDS_PER_MINUTE;
+  // Windows closer together than the rotation GAP can't all produce a change: a swap needs someone
+  // on long enough to come off AND someone rested enough to come on. The gap is the smaller of the
+  // two floors (a queue rotation moves one player per rest), so the cap follows it — not the bare
+  // stint, which would starve a one-player bench of windows.
+  const floors = rotationFloors(match, players);
+  const gapMin =
+    Math.max(
+      MIN_STINT_FLOOR_MINUTES * SECONDS_PER_MINUTE,
+      floors.minRestSec > 0 ? Math.min(floors.minStintSec, floors.minRestSec) : floors.minStintSec,
+    ) / SECONDS_PER_MINUTE;
   const capFor = (stintMin: number): number =>
     Math.max(0, Math.min(MAX_PLAN_WINDOWS, Math.floor(remainingMin / stintMin) - 1));
   // The AUTO answer must be searched against the coach's own floor — otherwise level 4/5's relaxed
   // floor would move the baseline the slider is measured from, and level 3 wouldn't be the anchor.
-  const autoMaxWindows = capFor(configuredMinStintMin);
+  const autoMaxWindows = capFor(Math.max(configuredMinStintMin, gapMin));
 
   // At the top notch the coach is asking to rotate as much as the squad allows, so the "only swap
   // for a meaningful fairness gain" margin comes off — otherwise, once everyone is already level,
@@ -651,7 +724,13 @@ function planContinuous(
   const hysteresis = Math.round(match.subFrequency ?? 0) >= 5 ? 0 : HYSTERESIS_SECONDS;
 
   const buildAt = (n: number, stintSec?: number): SubPlan => {
-    const times = applyStabilityHold(match, evenlySpacedWindows(fromSec, total, n), total);
+    // The stability hold can push a window up against the next one; two windows closer together
+    // than the rotation gap can only shuttle players (nobody is rested by the second), so the later
+    // one is dropped. The n-search measures VISIBLE changes, so it simply sees a calmer plan.
+    const times = enforceMinGap(
+      applyStabilityHold(match, evenlySpacedWindows(fromSec, total, n), total),
+      gapMin * SECONDS_PER_MINUTE,
+    );
     return makePlan(match, players, runSimulation(match, players, state, times, true, hysteresis, stintSec));
   };
 
@@ -712,7 +791,7 @@ function planContinuous(
 
   let chosen = autoPlan;
   let chosenMiss = Math.abs(autoVisible - targetVisible);
-  for (let n = 0; n <= capFor(minStintMin); n++) {
+  for (let n = 0; n <= capFor(Math.max(minStintMin, gapMin)); n++) {
     const plan = buildAt(n, minStintSec);
     const miss = Math.abs(plan.windows.length - targetVisible);
     // Closest to what the coach asked for; ties go to the calmer plan (fewer scheduled windows),

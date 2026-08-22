@@ -201,6 +201,13 @@ export interface PlayerLiveState {
   secondsBySlot: Partial<Record<PositionSlot, number>>;
   /** Seconds in the current uninterrupted stint (resets on sub on/off). */
   secondsThisStint: number;
+  /**
+   * Seconds on the bench since last coming OFF (accrues only while the clock runs; resets when
+   * subbed off). The other half of rotation quality: a player who just came off is not "fresh" yet,
+   * however much they're owed. A player who has never played (`secondsOnField === 0`) is fully
+   * rested by definition — see `isRestedEnough`. Derived, like everything in LiveState.
+   */
+  secondsThisRest: number;
   /** Coach marked this player as a key player / keep-on — never suggested off (§7.6). */
   locked: boolean;
   /** Coach pinned this player to a slot — the engine won't move them (§7.6). */

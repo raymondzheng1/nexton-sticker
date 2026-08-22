@@ -351,9 +351,12 @@ export const useLiveStore = create<LiveStoreState>((set, get) => {
       // an absent player kick off); otherwise the engine's auto-pick (which excludes them).
       const startable = new Set(match.players.filter(isStartableAtKickoff).map((p) => p.id));
       const confirmed = match.startingLineup;
+      // Short-handed, "the full XI" is everyone who can start — a 9-a-side with eight players
+      // confirms eight (owner decision 2026-08-17).
+      const fullSide = Math.min(match.config.onFieldCount, startable.size);
       const lineup =
         confirmed &&
-        confirmed.length === match.config.onFieldCount &&
+        confirmed.length === fullSide &&
         confirmed.every((a) => startable.has(a.playerId))
           ? confirmed
           : buildPlan(match.config, match.players).startingLineup.assignments;

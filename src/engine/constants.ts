@@ -93,6 +93,48 @@ export function subFrequencyMinStintScale(level: number | undefined): number {
 export const MIN_STINT_FLOOR_MINUTES = 2;
 
 /**
+ * Rotation quality (2026-08-17). Equal minutes alone let the engine shuttle a player on and off in
+ * a few minutes: coming off is exactly what makes someone the most-owed player at the next window,
+ * and the only guard was a 3-minute just-subbed floor. Coaches want everyone FRESH (properly
+ * rested) and WARM (a real run on the pitch), so the engine derives a minimum stint and a minimum
+ * rest from the match itself: each player's fair share of field time is split into about this
+ * many stints, and their time off the pitch into about as many rests. 3 is the Balanced answer:
+ * a 60-minute 5-a-side with 8 players gives roughly 12-minute stints and 7-minute rests; the
+ * sub-frequency slider shortens both at levels 4-5 (see subFrequencyMinStintScale).
+ */
+export const ROTATION_STINTS_PER_PLAYER = 3;
+
+/**
+ * How the derived targets are enforced. The HARD floor is this fraction of the target: below it
+ * the engine will not end a stint or a rest on its own (a forced change by the coach still can).
+ * Above it the target is a SOFT cost (see ROTATION_SOFT_WEIGHT). Making the whole target hard was
+ * tried first and failed the fairness corpus outright — matches that met tolerance stopped meeting
+ * it, a one-player bench stalled, and the live recommender went silent early in a match because
+ * nobody had been on "long enough". 0.5 then left 8-player plans just outside a 2′ tolerance and
+ * a quarter-by-quarter short match 30s over a 3′ one; 0.4 meets both with margin while still
+ * giving a 60′ 5-a-side with 8 players 5′ stints and 3′ rests as HARD floors (the soft cost and
+ * the rotation ordering do the rest). Measured, not guessed. Fairness leads; rotation shapes it.
+ */
+export const ROTATION_HARD_FRACTION = 0.4;
+
+/**
+ * Debt-seconds of cost per second a swap cuts a stint or a rest short of its target, tapering to
+ * zero as the match runs out (late balancing must never be blocked). A swap happens only when the
+ * fairness gain exceeds hysteresis PLUS this cost — so a 20-second advantage no longer pulls a
+ * player who has been on for five minutes, but a five-minute advantage still does.
+ */
+export const ROTATION_SOFT_WEIGHT = 0.35;
+
+/** A rest shorter than this isn't a rest. Floor for the derived minimum rest. */
+export const MIN_REST_FLOOR_SECONDS = 60;
+
+/**
+ * What a period break is worth as rest to the bench: enough to clear any rest floor the engine
+ * derives (the largest realistic floor is a few minutes), so everyone comes out of a break fresh.
+ */
+export const BREAK_REST_CREDIT_SECONDS = 15 * 60;
+
+/**
  * Default interval (minutes) between sub windows for rotationStyle === "interval", by on-field
  * count band (PRD §7.3). NOTE: these are TIME intervals, not on-field counts — the on-field
  * invariant (CLAUDE.md #1) forbids hard-coding the PLAYER count, not rotation cadence.

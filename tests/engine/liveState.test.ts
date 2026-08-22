@@ -75,7 +75,14 @@ describe("clock + event reducer (PRD §6.5, §8.3)", () => {
     s = applyEvent(s, { type: "TICK", atSeconds: 1560, deltaSeconds: 60 });
     expect(s.elapsedSeconds).toBe(1560);
     expect(s.players[onId]!.secondsOnField).toBe(1560);
-    expect(s.players[onId]!.secondsThisStint).toBe(60); // a new period is a fresh stint
+    // A restart does NOT reset the stint (changed 2026-08-17). Resetting it re-protected the
+    // whole pitch after every break — with a real rotation floor nobody could come off for most
+    // of a short quarter, and the squad drifted apart. A player on for 25′ before the break is
+    // due off, not freshly protected; the stint simply carries on.
+    expect(s.players[onId]!.secondsThisStint).toBe(1560);
+    // …while the BENCH comes out of the break fully rested, whatever the clock said before it.
+    const benchId = Object.values(s.players).find((p) => !p.onField)!.playerId;
+    expect(s.players[benchId]!.secondsThisRest).toBeGreaterThanOrEqual(15 * 60);
   });
 
   it("records WHERE each period started, so an early end can't stretch the next one", () => {

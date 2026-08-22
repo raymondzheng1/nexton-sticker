@@ -4,7 +4,7 @@
  * coach's decision always wins (CLAUDE.md invariant #2). Honours locks (key players are never
  * suggested off), pins, and just-subbed protection. Pure & deterministic.
  */
-import { benchEligibleNow, minStintSeconds } from "./candidates";
+import { benchRestedNow, effectiveFloors, rotationCostSeconds, rotationFloors } from "./candidates";
 import { PLAN_SWAP_HYSTERESIS_MINUTES, SECONDS_PER_MINUTE, SWAP_WEIGHTS } from "./constants";
 import { debtMap } from "./fairness";
 import { onFieldIds } from "./liveState";
@@ -20,7 +20,7 @@ import type {
   Recommendation,
   Swap,
 } from "./types";
-import { byAsc, byDesc, indexPlayers } from "./util";
+import { byDesc, indexPlayers } from "./util";
 
 const HYSTERESIS_SECONDS = PLAN_SWAP_HYSTERESIS_MINUTES * SECONDS_PER_MINUTE;
 
@@ -67,11 +67,22 @@ export function recommendSwaps(
   const byId = indexPlayers(players);
   const debts = debtMap(match, players, liveState);
   const nowSec = liveState.elapsedSeconds;
-  const minStint = minStintSeconds(match);
+  // The same rotation floors the planner works to: a real stint before coming off, a real rest
+  // before coming back. Live, the floors are what stop the recommender shuttling a player on and
+  // off within a few minutes of each other (owner report, 2026-08-17).
+  const floors = effectiveFloors(rotationFloors(match, players), nowSec);
+  const tolSec = match.fairnessToleranceMinutes * SECONDS_PER_MINUTE;
+  const minStint = floors.minStintSec;
   const minStintMin = minStint / SECONDS_PER_MINUTE;
   const gkExcluded = match.gkPolicy === "fixedGK" || match.gkPolicy === "rotateSeparately";
 
   const debtOf = (id: string): number => debts.get(id) ?? 0;
+  // Debts within a hysteresis band are "the same"; the rotation breaks the tie (see plan.ts).
+  const band = (id: string): number => Math.round(debtOf(id) / HYSTERESIS_SECONDS);
+  const restKey = (ps: PlayerLiveState): number =>
+    ps.secondsOnField === 0 ? Number.MAX_SAFE_INTEGER : ps.secondsThisRest;
+  const idOrder = (a: PlayerLiveState, b: PlayerLiveState): number =>
+    a.playerId < b.playerId ? -1 : a.playerId > b.playerId ? 1 : 0;
 
   const forceOff = options.forceOff ?? [];
   // "Immediate" = coach is forcing the change: skip just-subbed protection + the improvement gate.
@@ -93,10 +104,14 @@ export function recommendSwaps(
               !(gkExcluded && ps.currentSlot === "GK") &&
               (immediate || ps.secondsThisStint >= minStint),
           )
-          .sort(byAsc((ps) => debtOf(ps.playerId), (ps) => ps.playerId));
+          .sort(
+            (a, b) =>
+              band(a.playerId) - band(b.playerId) || b.secondsThisStint - a.secondsThisStint || idOrder(a, b),
+          );
 
-  const benchPool = benchEligibleNow(match, byId, liveState, nowSec).sort(
-    byDesc((ps) => debtOf(ps.playerId), (ps) => ps.playerId),
+  // Rested players only — unless the coach is forcing a change and nobody rested is available.
+  const benchPool = benchRestedNow(match, byId, liveState, nowSec, floors.minRestSec, immediate).sort(
+    (a, b) => band(b.playerId) - band(a.playerId) || restKey(b) - restKey(a) || idOrder(a, b),
   );
 
   const stintShortMinOf = (ps: PlayerLiveState): number =>
@@ -107,11 +122,16 @@ export function recommendSwaps(
     if (!onPlayer) return Number.NEGATIVE_INFINITY;
     const fit = positionFit(onPlayer, slot);
     if (fit <= 0) return Number.NEGATIVE_INFINITY; // e.g. GK slot, !canPlayGK
-    return swapScore(
-      debtOf(benchPs.playerId) / SECONDS_PER_MINUTE,
-      debtOf(offPs.playerId) / SECONDS_PER_MINUTE,
-      fit,
-      immediate ? 0 : stintShortMinOf(offPs),
+    return (
+      swapScore(
+        debtOf(benchPs.playerId) / SECONDS_PER_MINUTE,
+        debtOf(offPs.playerId) / SECONDS_PER_MINUTE,
+        fit,
+        immediate ? 0 : stintShortMinOf(offPs),
+      ) -
+      // The rotation cost, in the score's minute units — so among fillers the engine prefers the
+      // one who has had a proper rest, not merely the most-owed one. Waived for a forced change.
+      (immediate ? 0 : rotationCostSeconds(floors, offPs, benchPs, nowSec, tolSec) / SECONDS_PER_MINUTE)
     );
   };
 
@@ -139,9 +159,12 @@ export function recommendSwaps(
 
     const offDebt = debtOf(offPs.playerId);
     const onDebt = debtOf(top.b.playerId);
-    // Require a net fairness improvement (lists are sorted, so once the best pair fails, stop).
-    // Skipped when the coach is forcing the change (forceImmediate / forceOff).
-    if (!immediate && onDebt - offDebt <= HYSTERESIS_SECONDS) break;
+    // Require a net fairness improvement that also covers the rotation cost of THIS pair (see
+    // rotationCostSeconds). Per pair, so skip and try the next rather than stopping. Waived when
+    // the coach is forcing the change (forceImmediate / forceOff).
+    if (!immediate && onDebt - offDebt <= HYSTERESIS_SECONDS + rotationCostSeconds(floors, offPs, top.b, nowSec, tolSec)) {
+      continue;
+    }
 
     const candPlayer = byId.get(top.b.playerId) as Player;
     const toSlot = vacated; // like-for-like: the incoming player takes the vacated slot, full stop

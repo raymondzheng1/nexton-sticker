@@ -93,8 +93,11 @@ export function computeTargets(match: Match, players: Player[]): TargetsResult {
     return { targetSeconds, excludedFromFairness };
   }
 
-  // countAsFieldTime (default): GK seconds count like any other.
-  const totalFieldSeconds = match.onFieldCount * total;
+  // countAsFieldTime (default): GK seconds count like any other. SHORT-HANDED (fewer players than
+  // slots) the pitch only ever holds the squad, so the field-seconds to share are the squad's, not
+  // the formation's; otherwise everyone is "owed" more than the whole match and reads as behind.
+  const onPitch = Math.min(match.onFieldCount, available.filter((p) => effectiveWeight(p, match) > 0).length);
+  const totalFieldSeconds = onPitch * total;
   distributeByWeight(available, match, totalFieldSeconds, targetSeconds);
   return { targetSeconds, excludedFromFairness };
 }
