@@ -160,6 +160,22 @@ const SLOT_FULL_NAMES: Record<string, string> = {
 };
 
 /** "MC" → "Centre mid" (falls back to the code for anything unknown). */
+/**
+ * The period noun for a format. Coaches say "half" and "quarter" when there are two or four
+ * periods; anything else is a plain "period". The static per-sport noun read "Half 3 of 4" for a
+ * four-period football match (QA sweep, 2026-08-17). `SportConfig.periodLabel` remains the
+ * sport's DEFAULT-format noun; prefer this once the match's period count is known.
+ */
+export function periodLabelFor(periods: number): string {
+  return periods === 2 ? "Half" : periods === 4 ? "Quarter" : "Period";
+}
+
+/** The break heading to match {@link periodLabelFor}. */
+export function breakLabelFor(periods: number): string {
+  const noun = periodLabelFor(periods);
+  return noun === "Half" ? "Half time" : noun === "Quarter" ? "Quarter time" : "Period break";
+}
+
 export function slotFullName(slot: string): string {
   return SLOT_FULL_NAMES[slot] ?? slot;
 }

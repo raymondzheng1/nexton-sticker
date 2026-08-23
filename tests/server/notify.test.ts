@@ -76,6 +76,24 @@ describe("contact handler — spam layers + delivery", () => {
     expect(zContactRequest.safeParse({ message: "hello there, quick question" }).success).toBe(true);
     expect(zContactRequest.safeParse({ message: 42 }).success).toBe(false);
   });
+
+  it("REGRESSION: a mistyped reply email stays in the body but is NOT sent as reply_to", async () => {
+    const { sent, send } = capturingSender();
+    const res = await handleContactRequest(
+      { name: "Sam", email: "sam@typo", message: "Hello, quick question about rotation", startedAt: T0 - 60_000 },
+      send,
+      T0,
+    );
+    expect(res.status).toBe(200);
+    expect(sent[0]!.replyTo).toBeUndefined(); // a malformed header would make Resend reject the send
+    expect(sent[0]!.text).toContain("sam@typo"); // …but the operator still sees what was typed
+  });
+
+  it("a well-formed reply email is still set as reply_to", async () => {
+    const { sent, send } = capturingSender();
+    await handleContactRequest({ email: "sam@example.com", message: "Hello, quick question about rotation", startedAt: T0 - 60_000 }, send, T0);
+    expect(sent[0]!.replyTo).toBe("sam@example.com");
+  });
 });
 
 describe("activity handler — operator pings", () => {

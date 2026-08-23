@@ -57,7 +57,7 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   const sender = getSender();
-  if (!sender) return json({ error: "contact is not configured yet — please email me directly" }, 503);
+  if (!sender) return json({ error: "Messages aren't switched on for this app yet — please try again another day." }, 503);
 
   try {
     const result = await handleContactRequest(parsed.data, sender);
@@ -66,6 +66,7 @@ export async function POST(req: Request): Promise<Response> {
     // Log the real reason (Resend's status code — see resendSenderFromEnv). The user gets a friendly
     // line; without this the operator would never learn that a genuine enquiry failed to arrive.
     console.error("[contact] send failed:", err instanceof Error ? err.message : err);
-    return json({ error: "Sending failed — please try again, or email me directly." }, 502);
+    // No "email me directly": the app publishes no address, so that advice was a dead end (QA sweep).
+    return json({ error: "Sending failed — please try again in a minute." }, 502);
   }
 }

@@ -10,7 +10,7 @@
  *
  * Bump VERSION to invalidate old caches on a breaking change.
  */
-const VERSION = "v2";
+const VERSION = "v3";
 const STATIC_CACHE = `nexton-static-${VERSION}`;
 const PAGE_CACHE = `nexton-pages-${VERSION}`;
 
@@ -36,6 +36,20 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     (async () => {
       const keys = await caches.keys();
+      // Carry the previous version's cached PAGES forward before deleting it. Wiping first left the
+      // app with no cached shell until its next online visit — one offline launch after every
+      // version bump landed on a blank screen (QA sweep, 2026-08-17). Static assets are
+      // content-hashed and re-fetched by the new build, so only the page shells are worth keeping.
+      const fresh = await caches.open(PAGE_CACHE);
+      for (const k of keys) {
+        if (k === PAGE_CACHE || !k.startsWith("nexton-pages-")) continue;
+        const old = await caches.open(k);
+        for (const req of await old.keys()) {
+          if (await fresh.match(req)) continue;
+          const res = await old.match(req);
+          if (res) await fresh.put(req, res).catch(() => undefined);
+        }
+      }
       await Promise.all(keys.filter((k) => !k.endsWith(VERSION)).map((k) => caches.delete(k)));
       await self.clients.claim();
     })(),

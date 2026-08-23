@@ -73,7 +73,29 @@ const epochOf = (m: SavedMatch): number => m.eventEpoch ?? 0;
  */
 function mergeMatch(a: SavedMatch, b: SavedMatch): SavedMatch {
   if (epochOf(a) !== epochOf(b)) return epochOf(a) > epochOf(b) ? a : b;
-  return { ...pickNewer(a, b), events: mergeEvents(a.events, b.events) };
+  return reconcileWithLog({ ...pickNewer(a, b), events: mergeEvents(a.events, b.events) }, a, b);
+}
+
+/**
+ * The event log is the truth; `status` / `startedAtISO` / `endedAtISO` are derived from it. After a
+ * merge the metadata came from whichever copy was written LAST while the log came from whichever was
+ * LONGEST — and those can be different devices. A phone that never saw the kick-off and deleted the
+ * match later would have handed a fully played match the status "setup" and no kick-off time (QA
+ * sweep probe, 2026-08-17): restored from the bin, it would have looked never played. Re-derive
+ * from the merged log so the record can never contradict itself. The tombstone itself stays
+ * last-writer-wins, as documented.
+ */
+function reconcileWithLog(merged: SavedMatch, a: SavedMatch, b: SavedMatch): SavedMatch {
+  const started = merged.events.some((e) => e.type === "MATCH_STARTED");
+  const ended = merged.events.some((e) => e.type === "MATCH_ENDED");
+  const out: SavedMatch = { ...merged, status: ended ? "completed" : started ? "live" : "setup" };
+  const startedAt = a.startedAtISO ?? b.startedAtISO;
+  const endedAt = a.endedAtISO ?? b.endedAtISO;
+  if (started && startedAt !== undefined) out.startedAtISO = startedAt;
+  else delete out.startedAtISO;
+  if (ended && endedAt !== undefined) out.endedAtISO = endedAt;
+  else delete out.endedAtISO;
+  return out;
 }
 
 function mergeMatches(a: SavedMatch[], b: SavedMatch[]): SavedMatch[] {

@@ -9,8 +9,9 @@ import {
   SECONDS_PER_MINUTE,
   subFrequencyMinStintScale,
 } from "./constants";
-import { benchIds } from "./liveState";
-import type { LiveState, Match, Player, PlayerLiveState } from "./types";
+import { getFormation } from "./formations";
+import { benchIds, onFieldIds } from "./liveState";
+import type { LiveState, Match, Player, PlayerLiveState, PositionSlot } from "./types";
 import { effectiveWeight, getAvailablePlayers, isRetiredAt, keeperAt, totalMatchSeconds } from "./util";
 
 export function minStintSeconds(match: Match): number {
@@ -104,6 +105,29 @@ export function rotationCostSeconds(
   // keeps a match that ends early (see shortMatch.test) fair to the minute it stopped.
   const cap = Math.max(0, toleranceSec / 2 - PLAN_SWAP_HYSTERESIS_MINUTES * SECONDS_PER_MINUTE);
   return Math.min(cap, ROTATION_SOFT_WEIGHT * taper * (stintShort + restShort));
+}
+
+/**
+ * The formation slots nobody is standing in — a short-handed side's gaps. Multiset difference
+ * (a 4-2-3-1 has two DC slots), in formation order so the first vacancy is the most defensive one.
+ * Empty for a full side. Filling these is the change that gets a side back to full strength (a
+ * late arrival, a player added mid-match); before this existed the engine could only ever swap
+ * like-for-like and benched a starter to get the arrival on (QA sweep, 2026-08-17).
+ */
+export function vacantSlots(match: Match, state: LiveState): PositionSlot[] {
+  const formation = getFormation(match.onFieldCount, match.formationName, match.sport);
+  const taken = new Map<PositionSlot, number>();
+  for (const id of onFieldIds(state)) {
+    const slot = state.players[id]?.currentSlot;
+    if (slot) taken.set(slot, (taken.get(slot) ?? 0) + 1);
+  }
+  const vacant: PositionSlot[] = [];
+  for (const slot of formation.slots) {
+    const n = taken.get(slot) ?? 0;
+    if (n > 0) taken.set(slot, n - 1);
+    else vacant.push(slot);
+  }
+  return vacant;
 }
 
 /**

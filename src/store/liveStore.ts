@@ -21,6 +21,7 @@ import {
   restPlayerNow,
   snoozeNextSub,
   SECONDS_PER_MINUTE,
+  type LineupAssignment,
   type LiveState,
   type MatchEvent,
   type PlannedWindow,
@@ -32,7 +33,7 @@ import {
 } from "@/engine";
 import { useAppStore } from "./appStore";
 import { getRepo } from "./clientRepo";
-import { periodEndSeconds, shouldKeepNextChange, wallClockCatchUp } from "./clock";
+import { deriveNextChange, lastSubAppliedAt, periodEndSeconds, shouldKeepNextChange, wallClockCatchUp } from "./clock";
 import type { SavedMatch } from "./schema";
 import { reportActivity } from "./telemetry";
 
@@ -74,26 +75,6 @@ function stamped(event: MatchEvent, iso: string): MatchEvent {
   }
 }
 
-/**
- * First upcoming planned change as a stable countdown target, or null if none remain. When the coach
- * has approved a plan (`match.subPlan`) it is the GUIDE — the countdown follows its next window;
- * otherwise (or once it's exhausted) we fall back to the engine's continuous plan.
- */
-function deriveNextChange(
-  subPlan: PlannedWindow[] | null | undefined,
-  plan: SubPlan,
-  elapsedSeconds: number,
-): { atSeconds: number; fromSeconds: number } | null {
-  if (subPlan && subPlan.length > 0) {
-    const next = subPlan.find((w) => w.atSeconds > elapsedSeconds + 1);
-    if (next) return { atSeconds: next.atSeconds, fromSeconds: elapsedSeconds };
-    // plan exhausted (all windows passed) → fall through to the engine's plan
-  }
-  const w0 = plan.windows[0]?.atMinute;
-  if (w0 === undefined) return null;
-  return { atSeconds: Math.round(w0 * 60), fromSeconds: elapsedSeconds };
-}
-
 interface LiveStoreState {
   matchId: string | null;
   match: SavedMatch | null;
@@ -103,6 +84,13 @@ interface LiveStoreState {
   nextChange: { atSeconds: number; fromSeconds: number } | null;
   loading: boolean;
   error: string | null;
+  /**
+   * The last live action that FAILED to save (IndexedDB rejected the write), for the page to tell
+   * the coach — every action used to be fire-and-forget, so a failed write left a button that did
+   * nothing, silently (QA sweep, 2026-08-17). Cleared by the page once shown.
+   */
+  commitError: string | null;
+  clearCommitError: () => void;
 
   open: (matchId: string) => Promise<void>;
   close: () => void;
@@ -159,6 +147,23 @@ interface LiveStoreState {
   pin: (playerId: string, slot: PositionSlot | null) => Promise<void>;
   snooze: (minutes: number) => Promise<void>;
   endMatch: () => Promise<void>;
+}
+
+/**
+ * The coach's confirmed starting lineup if it is usable, else null (caller falls back to the
+ * engine's auto-pick). "Usable" = it covers the full side — which, short-handed, means everyone who
+ * can start, not the formation's slot count — and everyone in it can actually start (a stale
+ * confirmed lineup could still hold a player later marked 🕑 late). ONE rule, used by kick-off, the
+ * pre-match page and the rotation dial: when they disagreed the pre-match sheet showed the engine's
+ * keeper while kick-off used the coach's (QA sweep, 2026-08-17).
+ */
+export function confirmedLineupFor(match: SavedMatch): LineupAssignment[] | null {
+  const startable = new Set(match.players.filter(isStartableAtKickoff).map((p) => p.id));
+  const confirmed = match.startingLineup;
+  const fullSide = Math.min(match.config.onFieldCount, startable.size);
+  return confirmed && confirmed.length === fullSide && confirmed.every((a) => startable.has(a.playerId))
+    ? confirmed
+    : null;
 }
 
 export const useLiveStore = create<LiveStoreState>((set, get) => {
@@ -272,7 +277,7 @@ export const useLiveStore = create<LiveStoreState>((set, get) => {
     // A goal doesn't change minutes/the plan, so it must NOT re-pin the countdown (that would reset
     // the "next change" bar). Other events re-pin from the fresh plan as before.
     if (repin) {
-      nextChange = deriveNextChange(matchNow.subPlan, plan, working.elapsedSeconds);
+      nextChange = deriveNextChange(matchNow.subPlan, plan, working.elapsedSeconds, lastSubAppliedAt(matchNow.events));
       targetMatchId = matchId;
     }
     // `matchNow` always carries the freshest log (see above), so it is published unconditionally.
@@ -280,6 +285,9 @@ export const useLiveStore = create<LiveStoreState>((set, get) => {
     // Let lists that show match status (e.g. the team page) know this match changed (kickoff → live,
     // end → completed, etc.) so they don't render a stale status after a cached back-navigation.
     useAppStore.getState().bumpMatchRev();
+    // …and push it to the cloud soon. Live events never scheduled a sync, so a played match only
+    // reached the coach's other devices at the next app launch or team edit (QA sweep, 2026-08-17).
+    useAppStore.getState().syncSoon();
   }
 
   // Serialize commits: each runs after the previous fully settles, so it reads fresh state (no
@@ -287,7 +295,10 @@ export const useLiveStore = create<LiveStoreState>((set, get) => {
   let commitChain: Promise<void> = Promise.resolve();
   function commit(events: MatchEvent[], repin = true): Promise<void> {
     const run = commitChain.then(() => doCommit(events, repin));
-    commitChain = run.catch(() => undefined);
+    commitChain = run.catch((e: unknown) => {
+      // Keep the chain alive AND keep the failure: the page shows it as a toast.
+      set({ commitError: e instanceof Error ? e.message : "the change couldn't be saved" });
+    });
     return run;
   }
 
@@ -299,6 +310,8 @@ export const useLiveStore = create<LiveStoreState>((set, get) => {
     nextChange: null,
     loading: false,
     error: null,
+    commitError: null,
+    clearCommitError: () => set({ commitError: null }),
 
     open: async (matchId) => {
       set({ loading: true, error: null });
@@ -307,19 +320,37 @@ export const useLiveStore = create<LiveStoreState>((set, get) => {
         set({ loading: false, error: "Match not found", matchId: null, match: null, live: null, subPlan: null });
         return;
       }
-      const live = rebuildLiveState(match.config, match.players, match.events);
-      lastWallMs = Date.now();
-
-      // Catch up the clock to real wall time (the page can't tick while you're away).
-      const { working, delta, crossedPeriod } = wallClockCatchUp(live, match, Date.now());
+      let live: LiveState;
+      let working: LiveState;
+      let delta: number;
+      let crossedPeriod: boolean;
+      let plan: SubPlan;
+      try {
+        live = rebuildLiveState(match.config, match.players, match.events);
+        lastWallMs = Date.now();
+        // Catch up the clock to real wall time (the page can't tick while you're away).
+        ({ working, delta, crossedPeriod } = wallClockCatchUp(live, match, Date.now()));
+        plan = recalculate(match.config, match.players, working);
+      } catch (e) {
+        // An engine error here used to leave `loading` true forever — "Peeling the page open…" with
+        // no message and no way out (QA sweep, 2026-08-17). Loud, and recoverable from the team page.
+        set({
+          loading: false,
+          error: e instanceof Error ? e.message : "Couldn't open this match",
+          matchId: null,
+          match: null,
+          live: null,
+          subPlan: null,
+        });
+        return;
+      }
       unpersisted = delta; // persisted by autosave/close or the boundary commit below
 
-      const plan = recalculate(match.config, match.players, working);
       // Keep the previously-pinned countdown target if it's for THIS match and still in the future —
       // so the countdown stays stable across a navigate-away→return instead of re-deriving from now.
       // Re-pin from the fresh plan only on a different match or once the old target has been reached.
       if (!shouldKeepNextChange(nextChange, targetMatchId, matchId, working.elapsedSeconds)) {
-        nextChange = deriveNextChange(match.subPlan, plan, working.elapsedSeconds);
+        nextChange = deriveNextChange(match.subPlan, plan, working.elapsedSeconds, lastSubAppliedAt(match.events));
         targetMatchId = matchId;
       }
 
@@ -349,17 +380,7 @@ export const useLiveStore = create<LiveStoreState>((set, get) => {
       // Use the coach's confirmed lineup if it covers the full XI AND everyone in it can actually
       // start (a stale confirmed lineup could still hold a player later marked 🕑 late — never let
       // an absent player kick off); otherwise the engine's auto-pick (which excludes them).
-      const startable = new Set(match.players.filter(isStartableAtKickoff).map((p) => p.id));
-      const confirmed = match.startingLineup;
-      // Short-handed, "the full XI" is everyone who can start — a 9-a-side with eight players
-      // confirms eight (owner decision 2026-08-17).
-      const fullSide = Math.min(match.config.onFieldCount, startable.size);
-      const lineup =
-        confirmed &&
-        confirmed.length === fullSide &&
-        confirmed.every((a) => startable.has(a.playerId))
-          ? confirmed
-          : buildPlan(match.config, match.players).startingLineup.assignments;
+      const lineup = confirmedLineupFor(match) ?? buildPlan(match.config, match.players).startingLineup.assignments;
       await commit([{ type: "MATCH_STARTED", atSeconds: 0, lineup }]);
       lastWallMs = Date.now();
       await writeAnchor({ elapsedSeconds: get().live?.elapsedSeconds ?? 0, wallClockISO: new Date().toISOString() });
@@ -376,7 +397,7 @@ export const useLiveStore = create<LiveStoreState>((set, get) => {
       const updatedMatch = { ...match, subPlan: windows };
       // Re-pin the countdown to the approved plan's next window so the live cue follows it.
       const plan = recalculate(match.config, match.players, live);
-      nextChange = deriveNextChange(windows, plan, live.elapsedSeconds);
+      nextChange = deriveNextChange(windows, plan, live.elapsedSeconds, lastSubAppliedAt(get().match?.events ?? []));
       targetMatchId = matchId;
       set({ match: updatedMatch, subPlan: plan, nextChange });
     },
@@ -472,7 +493,7 @@ export const useLiveStore = create<LiveStoreState>((set, get) => {
     },
     endPeriod: async () => {
       const live = get().live;
-      if (live && live.status === "running") {
+      if (live && (live.status === "running" || live.status === "paused")) {
         await commit([{ type: "PERIOD_ENDED", atSeconds: live.elapsedSeconds, period: live.period }]);
         await writeAnchor(null); // half-time — clock frozen until next period
       }
@@ -522,11 +543,8 @@ export const useLiveStore = create<LiveStoreState>((set, get) => {
         // Nothing has happened yet, so the WHOLE timeline is regenerated at the new cadence — this
         // is the coach dialling the plan in before kickoff, and any hand-edits they made are
         // deliberately superseded (they just asked for a different plan).
-        const confirmed = updated.startingLineup;
         const lineup =
-          confirmed && confirmed.length === config.onFieldCount
-            ? confirmed
-            : buildPlan(config, updated.players).startingLineup.assignments;
+          confirmedLineupFor({ ...updated, config }) ?? buildPlan(config, updated.players).startingLineup.assignments;
         updated = await getRepo().updateMatch(matchId, {
           subPlan: planFromLineup(config, updated.players, lineup),
         });
@@ -536,7 +554,7 @@ export const useLiveStore = create<LiveStoreState>((set, get) => {
       }
 
       const plan = recalculate(config, updated.players, live);
-      nextChange = deriveNextChange(updated.subPlan, plan, live.elapsedSeconds);
+      nextChange = deriveNextChange(updated.subPlan, plan, live.elapsedSeconds, lastSubAppliedAt(updated.events));
       targetMatchId = matchId;
       set({ match: updated, subPlan: plan, nextChange });
     },

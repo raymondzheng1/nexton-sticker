@@ -14,6 +14,7 @@ import { rebuildLiveState } from "../../src/engine/index";
 import {
   advanceClock,
   installSeams,
+  makeMatchConfig,
   makePlayers,
   makeTeamInput,
   teardownSeams,
@@ -87,6 +88,57 @@ describe("sync is restart-safe — a wiped/re-played log never corrupts (#4 root
     const b = snap(match(0, long, "2026-01-02T00:00:00.000Z"));
     expect(mergeSnapshots(a, b).matches[0]!.events).toEqual(long);
     expect(mergeSnapshots(b, a).matches[0]!.events).toEqual(long);
+  });
+});
+
+describe("mergeMatch — metadata can never contradict the merged log (QA sweep, 2026-08-17)", () => {
+  const players = makePlayers(4);
+  const config = makeMatchConfig(2, players, { periods: 2, periodLengthMinutes: 10 });
+  const lineup = [
+    { slot: "DC" as const, playerId: players[0]!.id, positionFit: 1 },
+    { slot: "FC" as const, playerId: players[1]!.id, positionFit: 1 },
+  ];
+  const base = (over: Partial<SavedMatch>): SavedMatch => ({
+    id: "m1",
+    ownerId: "local",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+    deletedAt: null,
+    teamId: "t1",
+    name: "vs Rovers",
+    config,
+    players,
+    status: "setup",
+    startingLineup: null,
+    events: [],
+    eventEpoch: 0,
+    ...over,
+  });
+  const snapOf = (m: SavedMatch): AppSnapshot => ({ schemaVersion: 1, ownerId: "local", updatedAt: m.updatedAt, teams: [], matches: [m] });
+
+  it("REGRESSION: a stale device's LATER tombstone keeps the delete but cannot turn a played match back into 'setup'", () => {
+    const played: MatchEvent[] = [
+      { type: "MATCH_STARTED", atSeconds: 0, lineup },
+      { type: "TICK", atSeconds: 600, deltaSeconds: 600 },
+      { type: "MATCH_ENDED", atSeconds: 600 },
+    ];
+    const phoneB = base({ status: "completed", events: played, updatedAt: "2026-01-01T11:00:00.000Z", startedAtISO: "2026-01-01T10:00:00.000Z", endedAtISO: "2026-01-01T10:10:00.000Z" });
+    // Phone A never saw the kick-off (its copy is pre-match) and deletes the match LATER.
+    const phoneA = base({ status: "setup", events: [], updatedAt: "2026-01-01T12:00:00.000Z", deletedAt: "2026-01-01T12:00:00.000Z" });
+    const merged = mergeSnapshots(snapOf(phoneB), snapOf(phoneA)).matches[0]!;
+    expect(merged.deletedAt).not.toBeNull(); // the delete wins (documented LWW) — and is restorable
+    expect(merged.events).toEqual(played); // anti-shrink: the played log survives
+    expect(merged.status).toBe("completed"); // …and the metadata agrees with it
+    expect(merged.startedAtISO).toBe("2026-01-01T10:00:00.000Z");
+    expect(merged.endedAtISO).toBe("2026-01-01T10:10:00.000Z");
+  });
+
+  it("a never-started match stays 'setup' with no kick-off time, whichever copy is newer", () => {
+    const a = base({ updatedAt: "2026-01-01T12:00:00.000Z", startedAtISO: "stale-garbage" });
+    const b = base({ updatedAt: "2026-01-01T11:00:00.000Z" });
+    const merged = mergeSnapshots(snapOf(a), snapOf(b)).matches[0]!;
+    expect(merged.status).toBe("setup");
+    expect(merged.startedAtISO).toBeUndefined();
   });
 });
 

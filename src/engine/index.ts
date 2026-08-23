@@ -129,4 +129,4 @@ export {
   totalMatchSeconds,
 } from "./util";
 export { ROTATION_HARD_FRACTION, ROTATION_SOFT_WEIGHT, ROTATION_STINTS_PER_PLAYER } from "./constants";
-export { isRestedEnough, rotationCostSeconds, rotationFloors, type RotationFloors } from "./candidates";
+export { isRestedEnough, rotationCostSeconds, rotationFloors, vacantSlots, type RotationFloors } from "./candidates";

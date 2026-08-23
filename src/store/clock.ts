@@ -5,7 +5,7 @@
  * the real time. Routing "now" through one seam keeps record timestamps deterministic in tests
  * (`__setNowForTests`) — important because `updatedAt` drives sync's last-writer-wins merge.
  */
-import { applyEvent, type LiveState } from "@/engine";
+import { applyEvent, type LiveState, type MatchEvent, type PlannedWindow, type SubPlan } from "@/engine";
 import type { SavedMatch } from "./schema";
 
 let nowFn: () => string = () => new Date().toISOString();
@@ -73,7 +73,48 @@ export function regulationEndSeconds(match: SavedMatch, live: LiveState): number
  * tested without a browser.
  */
 export function canEndPeriodEarly(match: SavedMatch, live: LiveState): boolean {
-  return live.status === "running" && live.period < match.config.periods;
+  // On Hold counts: a coach who stopped the clock for an injury and then wants the half over
+  // shouldn't have to restart the clock to find the button (QA sweep, 2026-08-17).
+  return (live.status === "running" || live.status === "paused") && live.period < match.config.periods;
+}
+
+/** How long a planned change stays "due" after its minute before the countdown moves on. */
+export const CHANGE_DUE_GRACE_SECONDS = 3 * 60;
+
+/** Match-clock time of the last substitution actually made, or -1 if none. */
+export function lastSubAppliedAt(events: readonly MatchEvent[]): number {
+  let at = -1;
+  for (const e of events) if (e.type === "SUB_APPLIED") at = e.atSeconds;
+  return at;
+}
+
+/**
+ * First upcoming planned change as a stable countdown target, or null if none remain. When the
+ * coach has approved a plan (the guide) the countdown follows its next window; otherwise (or once
+ * it's exhausted) we fall back to the engine's continuous plan.
+ *
+ * A window is PENDING until a sub has been made at or after it — or it is more than the grace
+ * behind the clock. Choosing "the first window strictly after now" skipped any change that was due
+ * but not yet confirmed on every re-pin: pausing for an injury moved the countdown to the FOLLOWING
+ * window, and the half-time keeper change (its window sits exactly on the period boundary) never
+ * reached the coach at all (QA sweep, 2026-08-17).
+ */
+export function deriveNextChange(
+  subPlan: readonly PlannedWindow[] | null | undefined,
+  plan: SubPlan,
+  elapsedSeconds: number,
+  lastSubAt = -1,
+): { atSeconds: number; fromSeconds: number } | null {
+  if (subPlan && subPlan.length > 0) {
+    const next = subPlan.find(
+      (w) => w.atSeconds > lastSubAt && w.atSeconds > elapsedSeconds - CHANGE_DUE_GRACE_SECONDS,
+    );
+    if (next) return { atSeconds: next.atSeconds, fromSeconds: elapsedSeconds };
+    // plan exhausted (all windows passed) → fall through to the engine's plan
+  }
+  const w0 = plan.windows[0]?.atMinute;
+  if (w0 === undefined) return null;
+  return { atSeconds: Math.round(w0 * 60), fromSeconds: elapsedSeconds };
 }
 
 /**
@@ -139,7 +180,12 @@ export function wallClockCatchUp(live: LiveState, match: SavedMatch, nowMs: numb
       // the app is open and ticking (coach present), added time still rolls uncapped.
       const addedTimeCap = periodEnd + periodLengthSeconds(match) / 2;
       const target = isFinalPeriod ? Math.min(trueElapsed, addedTimeCap) : Math.min(trueElapsed, periodEnd);
-      delta = Math.floor(target - live.elapsedSeconds);
+      // Never negative. A coach who kept the app OPEN through added time has already run the clock
+      // past the unattended cap (attended added time is uncapped by design); reopening must not
+      // "catch up" backwards. A negative delta used to flow into liveStore's unpersisted seconds,
+      // where the next autosave appended a TICK with deltaSeconds < 0 and the reducer threw on
+      // every save for the rest of the match (QA sweep probe, 2026-08-17).
+      delta = Math.max(0, Math.floor(target - live.elapsedSeconds));
       if (delta > 0) {
         working = applyEvent(live, { type: "TICK", atSeconds: live.elapsedSeconds + delta, deltaSeconds: delta });
       }

@@ -122,3 +122,24 @@ describe("match log", () => {
     expect(wallClockLabel("2026-08-06T14:32:00.000Z")).toMatch(/^\d{2}:\d{2}$/);
   });
 });
+
+describe("a player taken off with no replacement (QA sweep, 2026-08-17)", () => {
+  it("REGRESSION: the injury-with-an-empty-bench change is in the log and reads honestly", () => {
+    const feed = buildMatchFeed([
+      KICKOFF,
+      { type: "TICK", atSeconds: 1390, deltaSeconds: 1390 },
+      { type: "SUB_APPLIED", atSeconds: 1390, off: ["p1"], on: [], positionChanges: [] },
+    ]);
+    expect(feed[0]?.kind).toBe("sub");
+    expect(feed[0] && feedLineText(feed[0], LABELS)).toBe("Sam off — no replacement");
+    expect(countActualSubs(feed)).toBe(1);
+  });
+
+  it("a fill (short-handed side, nobody off) still reads as a plain 'on'", () => {
+    const feed = buildMatchFeed([
+      KICKOFF,
+      { type: "SUB_APPLIED", atSeconds: 600, off: [], on: [{ playerId: "p2", slot: "MC" }], positionChanges: [] },
+    ]);
+    expect(feed[0] && feedLineText(feed[0], LABELS)).toBe("Alex on (MC)");
+  });
+});

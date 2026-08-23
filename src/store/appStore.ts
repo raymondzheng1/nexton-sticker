@@ -14,7 +14,7 @@ import { getOwnerId, resetOwnerId, setOwnerId } from "./identity";
 import { isValidCapabilityCode, normalizeCapabilityCode } from "./ids";
 import type { CreateMatchInput, TeamInput } from "./repository";
 import type { SavedMatch, Team } from "./schema";
-import { mergeSnapshots, saveSnapshotTo } from "./sync";
+import { loadSnapshotFrom, mergeSnapshots, saveSnapshotTo } from "./sync";
 import { reportActivity } from "./telemetry";
 
 const CODE_KEY = "nexton:code";
@@ -59,6 +59,10 @@ interface AppState {
   teams: Team[];
   code: string | null;
   syncStatus: SyncStatus;
+  /** Why the last sync failed, in the server's own words — shown beside the status. */
+  syncError: string | null;
+  /** Ask for a cloud push soon (debounced). The live store calls this after every commit. */
+  syncSoon: () => void;
   prefs: MatchPrefs;
   /**
    * Bumped whenever a match is created/deleted/changed (incl. kickoff/subs/end from the live store).
@@ -73,6 +77,8 @@ interface AppState {
   refreshTeams: () => Promise<void>;
   saveTeam: (input: TeamInput) => Promise<Team>;
   deleteTeam: (id: string) => Promise<void>;
+  restoreTeam: (id: string) => Promise<Team | null>;
+  listDeletedTeams: () => Promise<Team[]>;
   createMatch: (input: CreateMatchInput) => Promise<SavedMatch>;
   deleteMatch: (id: string) => Promise<void>;
   /** Undo a delete — deletes are tombstones, so a mis-tapped ✕ is always recoverable. */
@@ -103,6 +109,8 @@ export const useAppStore = create<AppState>((set, get) => {
     teams: [],
     code: null,
     syncStatus: "idle",
+    syncError: null,
+    syncSoon: () => scheduleSync(),
     prefs: DEFAULT_PREFS,
     matchRev: 0,
 
@@ -118,6 +126,11 @@ export const useAppStore = create<AppState>((set, get) => {
       }
       await get().refreshTeams();
       set({ ready: true });
+      // Ask the browser not to evict this origin's storage under pressure: a season with no sync
+      // code lives only in IndexedDB (QA sweep, 2026-08-17). Best-effort; a refusal is fine.
+      if (typeof navigator !== "undefined" && navigator.storage && typeof navigator.storage.persist === "function") {
+        void navigator.storage.persist().catch(() => undefined);
+      }
       if (get().code) void get().syncCloud();
     },
 
@@ -153,6 +166,15 @@ export const useAppStore = create<AppState>((set, get) => {
       if (team) reportActivity("team_deleted", `${team.name} · ${team.roster.length} players`);
     },
 
+    restoreTeam: async (id) => {
+      const team = await getRepo().restoreTeam(id);
+      await get().refreshTeams();
+      scheduleSync();
+      return team;
+    },
+
+    listDeletedTeams: () => getRepo().listDeletedTeams(),
+
     createMatch: async (input) => {
       const match = await getRepo().createMatch(input);
       get().bumpMatchRev();
@@ -184,11 +206,15 @@ export const useAppStore = create<AppState>((set, get) => {
     setCode: async (rawCode, opts) => {
       const code = normalizeCapabilityCode(rawCode);
       if (!code) throw new Error("That code isn't valid. Use the format ABC-DEF.");
-      // Migrate the current (local) data to the code so nothing is lost on activation.
+      // Migrate the current (local) data to the code so nothing is lost on activation — MERGED with
+      // whatever this device already holds under that code (a coach who tapped "Stop" and then
+      // re-entered the same code had the code's own snapshot overwritten, matches and all — QA
+      // sweep, 2026-08-17).
       const current = await getRepo().loadSnapshot();
+      const existing = await loadSnapshotFrom(getLocalKvs(), code);
       setOwnerId(code);
       if (typeof localStorage !== "undefined") localStorage.setItem(CODE_KEY, code);
-      await saveSnapshotTo(getLocalKvs(), withOwner(current, code));
+      await saveSnapshotTo(getLocalKvs(), mergeSnapshots(withOwner(current, code), existing));
       await getRepo().loadSnapshot();
       set({ code });
       await get().refreshTeams();
@@ -201,8 +227,14 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     clearCode: async () => {
+      // Keep everything created under the code: migrate it back to the local owner BEFORE
+      // switching identity — the mirror image of setCode's local → code migration. Without this,
+      // every team and match made since the code was activated vanished from the screen (still on
+      // disk, keyed to the code, but invisible) — the QA sweep's data-safety finding, 2026-08-17.
+      const current = await getRepo().loadSnapshot();
       resetOwnerId();
       if (typeof localStorage !== "undefined") localStorage.removeItem(CODE_KEY);
+      await saveSnapshotTo(getLocalKvs(), withOwner(current, getOwnerId()));
       set({ code: null, syncStatus: "idle" });
       await getRepo().loadSnapshot();
       await get().refreshTeams();
@@ -211,21 +243,31 @@ export const useAppStore = create<AppState>((set, get) => {
     syncCloud: async () => {
       const code = get().code;
       if (!code) return;
-      set({ syncStatus: "syncing" });
+      set({ syncStatus: "syncing", syncError: null });
       try {
         const local = await getRepo().loadSnapshot();
         const merged = await requestCloudSync(code, local);
-        await saveSnapshotTo(getLocalKvs(), merged);
+        // The request took time; the coach may have kicked off or subbed meanwhile, and those events
+        // live only in the local store. Merge the cloud's answer INTO the latest local snapshot
+        // rather than overwriting it — writing `merged` straight back erased every event committed
+        // while the request was in flight (QA sweep, 2026-08-17). The cloud picks them up next push.
+        const latest = await getRepo().loadSnapshot();
+        await saveSnapshotTo(getLocalKvs(), mergeSnapshots(latest, merged));
         await getRepo().loadSnapshot();
         await get().refreshTeams();
-        set({ syncStatus: "idle" });
-      } catch {
+        set({ syncStatus: "idle", syncError: null });
+      } catch (e) {
         const offline = typeof navigator !== "undefined" && navigator.onLine === false;
-        set({ syncStatus: offline ? "offline" : "error" });
+        set({
+          syncStatus: offline ? "offline" : "error",
+          syncError: offline ? null : e instanceof Error ? e.message : String(e),
+        });
       }
     },
 
-    exportData: async () => exportSnapshotJson(await getRepo().loadSnapshot()),
+    // The backup file is for the coach's own files and for moving devices; import re-owns every
+    // record anyway, so the capability code (a bearer credential) has no business in it.
+    exportData: async () => exportSnapshotJson(withOwner(await getRepo().loadSnapshot(), "backup")),
 
     importData: async (json) => {
       const incoming = importSnapshotJson(json);

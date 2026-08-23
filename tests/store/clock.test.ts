@@ -16,6 +16,9 @@ import {
   remainingInPeriodSeconds,
   shouldKeepNextChange,
   wallClockCatchUp,
+  CHANGE_DUE_GRACE_SECONDS,
+  deriveNextChange,
+  lastSubAppliedAt,
 } from "../../src/store/clock";
 import type { SavedMatch } from "../../src/store/schema";
 import { makeMatch, makeSquad } from "../engine/_fixtures";
@@ -120,6 +123,18 @@ describe("wall-clock catch-up — the away-clock keeps running (#3)", () => {
     const again = wallClockCatchUp(working, match, T0 + 40 * 3600_000);
     expect(again.delta).toBe(0);
     expect(again.working.elapsedSeconds).toBe(2250);
+  });
+
+  it("REGRESSION: reopening after ATTENDED added time ran past the unattended cap never winds the clock back", () => {
+    const players = makeSquad(8);
+    const config = makeMatch(5, players, { periods: 1 }); // total 1500s, final period; cap = 1500 + 750 = 2250
+    // The coach kept the app open and let added time run to 2400s (uncapped while attended).
+    const live = runningLive(config, players, 2400);
+    const match = savedMatch(config, players, { elapsedSeconds: 2400, wallClockISO: new Date(T0).toISOString() });
+    // Reopened 5s later: the unattended cap (2250) is BELOW the real elapsed. Delta must be 0, not −150.
+    const { working, delta } = wallClockCatchUp(live, match, T0 + 5_000);
+    expect(delta).toBe(0);
+    expect(working.elapsedSeconds).toBe(2400);
   });
 
   it("no anchor (paused/frozen) → clock does not advance", () => {
@@ -342,10 +357,50 @@ describe("who may end a period early", () => {
     expect(canEndPeriodEarly(savedMatch(onePeriod, players, null), runningLive(onePeriod, players, 60))).toBe(false);
   });
 
-  it("not offered unless the clock is running (pre-match, paused, at the break, full time)", () => {
+  it("IS offered while on Hold — an injury stoppage that becomes the end of the half (QA sweep, 2026-08-17)", () => {
+    expect(canEndPeriodEarly(match, { ...inPeriod(1), status: "paused" })).toBe(true);
+  });
+
+  it("not offered pre-match, at the break, or at full time", () => {
     const running = inPeriod(1);
-    for (const status of ["pre-match", "paused", "period-break", "full-time"] as const) {
+    for (const status of ["pre-match", "period-break", "full-time"] as const) {
       expect(canEndPeriodEarly(match, { ...running, status })).toBe(false);
     }
+  });
+});
+
+describe("the next-change countdown keeps a due change until it is made (QA sweep, 2026-08-17)", () => {
+  const windows = [
+    { atSeconds: 600, off: ["a"], on: [{ playerId: "b", slot: "MC" as const }], positionChanges: [] },
+    { atSeconds: 1200, off: ["c"], on: [{ playerId: "d", slot: "MC" as const }], positionChanges: [] },
+    { atSeconds: 1800, off: ["e"], on: [{ playerId: "f", slot: "GK" as const }], positionChanges: [] },
+  ];
+  const noEnginePlan = { windows: [] } as unknown as Parameters<typeof deriveNextChange>[1];
+
+  it("REGRESSION: a re-pin while the 10′ change is due (Hold for an injury) keeps 10′, not 20′", () => {
+    expect(deriveNextChange(windows, noEnginePlan, 660, -1)?.atSeconds).toBe(600);
+  });
+
+  it("once the sub is made the countdown moves to the next window", () => {
+    expect(deriveNextChange(windows, noEnginePlan, 660, 640)?.atSeconds).toBe(1200);
+  });
+
+  it("a change ignored for longer than the grace is let go", () => {
+    expect(deriveNextChange(windows, noEnginePlan, 600 + CHANGE_DUE_GRACE_SECONDS + 1, -1)?.atSeconds).toBe(1200);
+  });
+
+  it("REGRESSION: the half-time keeper change sits exactly on the boundary and is still offered at the restart", () => {
+    expect(deriveNextChange(windows, noEnginePlan, 1800, 1200)?.atSeconds).toBe(1800);
+  });
+
+  it("lastSubAppliedAt reads the latest substitution from the log", () => {
+    expect(lastSubAppliedAt([])).toBe(-1);
+    expect(
+      lastSubAppliedAt([
+        { type: "SUB_APPLIED", atSeconds: 300, off: [], on: [], positionChanges: [] },
+        { type: "TICK", atSeconds: 400, deltaSeconds: 100 },
+        { type: "SUB_APPLIED", atSeconds: 900, off: [], on: [], positionChanges: [] },
+      ]),
+    ).toBe(900);
   });
 });

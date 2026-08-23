@@ -61,17 +61,26 @@ export function computeTargets(match: Match, players: Player[]): TargetsResult {
     if (isRetired(p)) excludedFromFairness.add(p.id);
   }
 
+  // SHORT-HANDED (fewer players than slots) the pitch only ever holds the squad, so the
+  // field-seconds to share are the squad's, not the formation's — in EVERY policy branch.
+  // Clamping only the default branch left a fixed-keeper 8-of-9 side reading "behind" all match
+  // and its parents' note saying "Max off-target: 7′" (QA sweep, 2026-08-17).
+  const squad = available.filter((p) => effectiveWeight(p, match) > 0).length;
+  const onPitch = Math.min(match.onFieldCount, squad);
+
   if (match.gkPolicy === "fixedGK") {
-    if (isSingleKeeper(match)) {
+    const gkId = keepersByPeriod(match)[0];
+    invariant(gkId !== undefined, 'gkPolicy "fixedGK" requires a keeper', {});
+    // The designated keeper may not be HERE (marked 🕑 late, retired) — planFromState narrows the
+    // squad to who's actually available. Throwing here used to make a match with a late keeper
+    // un-openable. With no keeper on the pitch, the side is just a squad sharing the pitch.
+    if (isSingleKeeper(match) && match.availableSquad.includes(gkId)) {
       // ONE keeper for the whole match: they're excluded from the outfield fair-share (they keep the
-      // whole game) and the remaining (onFieldCount − 1) slots are shared by everyone else.
-      const gkId = keepersByPeriod(match)[0];
-      invariant(gkId !== undefined, 'gkPolicy "fixedGK" requires a keeper', {});
-      invariant(match.availableSquad.includes(gkId), "keeper must be in the available squad", { gkId });
+      // whole game) and the remaining slots are shared by everyone else.
       excludedFromFairness.add(gkId);
       targetSeconds[gkId] = total;
       const outfield = available.filter((p) => p.id !== gkId);
-      const outfieldFieldSeconds = (match.onFieldCount - 1) * total;
+      const outfieldFieldSeconds = Math.max(0, onPitch - 1) * total;
       distributeByWeight(outfield, match, outfieldFieldSeconds, targetSeconds);
       return { targetSeconds, excludedFromFairness };
     }
@@ -80,25 +89,19 @@ export function computeTargets(match: Match, players: Player[]): TargetsResult {
     // the forward plan locks the right keeper in goal each period, which naturally compensates a
     // keeper with less outfield time. Nobody is excluded — a keeper is a normal rotation player when
     // they're not the one keeping.
-    const totalFieldSeconds = match.onFieldCount * total;
-    distributeByWeight(available, match, totalFieldSeconds, targetSeconds);
+    distributeByWeight(available, match, onPitch * total, targetSeconds);
     return { targetSeconds, excludedFromFairness };
   }
 
   if (match.gkPolicy === "rotateSeparately") {
     // Outfield fairness computed over outfield seconds only; the GK role rotates on its own
     // schedule and GK seconds are excluded from each player's outfield fairness (see debt below).
-    const outfieldFieldSeconds = (match.onFieldCount - 1) * total;
-    distributeByWeight(available, match, outfieldFieldSeconds, targetSeconds);
+    distributeByWeight(available, match, Math.max(0, onPitch - 1) * total, targetSeconds);
     return { targetSeconds, excludedFromFairness };
   }
 
-  // countAsFieldTime (default): GK seconds count like any other. SHORT-HANDED (fewer players than
-  // slots) the pitch only ever holds the squad, so the field-seconds to share are the squad's, not
-  // the formation's; otherwise everyone is "owed" more than the whole match and reads as behind.
-  const onPitch = Math.min(match.onFieldCount, available.filter((p) => effectiveWeight(p, match) > 0).length);
-  const totalFieldSeconds = onPitch * total;
-  distributeByWeight(available, match, totalFieldSeconds, targetSeconds);
+  // countAsFieldTime (default): GK seconds count like any other.
+  distributeByWeight(available, match, onPitch * total, targetSeconds);
   return { targetSeconds, excludedFromFairness };
 }
 

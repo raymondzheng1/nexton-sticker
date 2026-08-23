@@ -78,6 +78,10 @@ export interface Repository {
   getTeam(id: string): Promise<Team | null>;
   saveTeam(input: TeamInput): Promise<Team>;
   deleteTeam(id: string): Promise<void>;
+  /** Undo a team delete — deletes are tombstones, so a whole album is always recoverable. */
+  restoreTeam(id: string): Promise<Team | null>;
+  /** Recently deleted teams (newest deletion first) — the bin the teams index shows. */
+  listDeletedTeams(): Promise<Team[]>;
   listMatches(teamId?: string): Promise<SavedMatch[]>;
   getMatch(id: string): Promise<SavedMatch | null>;
   createMatch(input: CreateMatchInput): Promise<SavedMatch>;
@@ -182,6 +186,24 @@ export class SnapshotRepository implements Repository {
     await this.persist(snap);
   }
 
+  async restoreTeam(id: string): Promise<Team | null> {
+    const snap = await this.ensureLoaded();
+    const team = snap.teams.find((t) => t.id === id);
+    if (!team || team.deletedAt === null) return team ? clone(team) : null;
+    team.deletedAt = null;
+    team.updatedAt = now();
+    await this.persist(snap);
+    return clone(team);
+  }
+
+  async listDeletedTeams(): Promise<Team[]> {
+    const snap = await this.ensureLoaded();
+    return snap.teams
+      .filter((t) => t.deletedAt !== null)
+      .sort((a, b) => (b.deletedAt ?? "").localeCompare(a.deletedAt ?? ""))
+      .map(clone);
+  }
+
   // ── matches ───────────────────────────────────────────────────────────────
 
   async listMatches(teamId?: string): Promise<SavedMatch[]> {
@@ -273,6 +295,10 @@ export class SnapshotRepository implements Repository {
   async appendEvent(matchId: string, event: MatchEvent): Promise<SavedMatch> {
     const snap = await this.ensureLoaded();
     const match = this.requireMatch(snap, matchId);
+    // Mutate a copy of the record's metadata so a FAILED persist can be rolled back exactly: the
+    // cached snapshot used to keep the pushed event, and the next successful save wrote it out —
+    // an event the coach never saw land (QA sweep, 2026-08-17).
+    const before = { status: match.status, startedAtISO: match.startedAtISO, endedAtISO: match.endedAtISO, updatedAt: match.updatedAt };
     match.events.push(event);
     if (event.type === "MATCH_STARTED") {
       match.status = "live";
@@ -282,7 +308,18 @@ export class SnapshotRepository implements Repository {
       match.endedAtISO = now();
     }
     match.updatedAt = now();
-    await this.persist(snap);
+    try {
+      await this.persist(snap);
+    } catch (e) {
+      match.events.pop();
+      match.status = before.status;
+      match.updatedAt = before.updatedAt;
+      if (before.startedAtISO === undefined) delete match.startedAtISO;
+      else match.startedAtISO = before.startedAtISO;
+      if (before.endedAtISO === undefined) delete match.endedAtISO;
+      else match.endedAtISO = before.endedAtISO;
+      throw e;
+    }
     return clone(match);
   }
 

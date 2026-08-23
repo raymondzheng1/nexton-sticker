@@ -23,6 +23,7 @@ import {
   isStartableAtKickoff,
   rotationCostSeconds,
   rotationFloors,
+  vacantSlots,
   type RotationFloors,
 } from "./candidates";
 import { invariant } from "./errors";
@@ -116,8 +117,17 @@ export function chooseStartingLineup(
   for (const gkIdx of gkSlotIndices) {
     let chosen: string | undefined;
     if (match.gkPolicy === "fixedGK") {
-      chosen = keepersByPeriod(match)[0]; // the first-half keeper starts in goal
-      invariant(chosen !== undefined, 'gkPolicy "fixedGK" requires a keeper', {});
+      const designated = keepersByPeriod(match)[0]; // the first-half keeper starts in goal
+      invariant(designated !== undefined, 'gkPolicy "fixedGK" requires a keeper', {});
+      // The coach's keeper may be marked 🕑 late (or otherwise unable to start). Putting an absent
+      // player in goal at kick-off created a match that could never be opened (QA sweep,
+      // 2026-08-17). Fall back to the best keeper who CAN start; the designated one takes over
+      // when they arrive and the next period starts (forceGk).
+      chosen = kickoffPool.some((p) => p.id === designated)
+        ? designated
+        : kickoffPool
+            .filter((p) => p.canPlayGK && !used.has(p.id))
+            .sort(byDesc((p) => (p.mustStart || p.alwaysOn ? 1e9 : 0) + carryForwardOf(p), (p) => p.id))[0]?.id;
     } else {
       const keepers = kickoffPool
         .filter((p) => p.canPlayGK && !used.has(p.id))
@@ -376,8 +386,19 @@ function decideOutfieldSwaps(
         idOrder(a, b),
     );
 
+  // SHORT-HANDED: vacant formation slots are filled from the bench before any like-for-like swap
+  // is considered — RESERVED first (so the one late arrival isn't spent on a swap that leaves the
+  // side still a player down), but EMITTED last, because a planned window pairs off[i] with on[i]
+  // by index and a fill has no "off" (see sanitizeWindow in planEdit.ts).
   const usedBench = new Set<string>();
-  const maxSwaps = Math.min(offCandidates.length, benchPool.length);
+  const fills: { playerId: string; slot: PositionSlot }[] = [];
+  for (const slot of vacantSlots(match, state)) {
+    const cand = pickBenchFor(slot, benchPool, usedBench, byId, debts);
+    if (!cand) continue;
+    usedBench.add(cand.playerId);
+    fills.push({ playerId: cand.playerId, slot });
+  }
+  const maxSwaps = Math.min(offCandidates.length, benchPool.length - fills.length);
 
   for (const offPs of offCandidates) {
     if (acc.off.length >= maxSwaps) break;
@@ -408,6 +429,19 @@ function decideOutfieldSwaps(
       positionFit: positionFit(candPlayer, vacated),
     });
     usedBench.add(cand.playerId);
+  }
+
+  for (const fill of fills) {
+    const p = byId.get(fill.playerId) as Player;
+    acc.on.push(fill);
+    acc.swaps.push({
+      playerOff: null,
+      playerOn: fill.playerId,
+      toSlot: fill.slot,
+      offDebtSeconds: 0,
+      onDebtSeconds: debts.get(fill.playerId) ?? 0,
+      positionFit: positionFit(p, fill.slot),
+    });
   }
 }
 

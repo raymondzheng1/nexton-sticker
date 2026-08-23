@@ -4,7 +4,7 @@
  * coach's decision always wins (CLAUDE.md invariant #2). Honours locks (key players are never
  * suggested off), pins, and just-subbed protection. Pure & deterministic.
  */
-import { benchRestedNow, effectiveFloors, rotationCostSeconds, rotationFloors } from "./candidates";
+import { benchRestedNow, effectiveFloors, rotationCostSeconds, rotationFloors, vacantSlots } from "./candidates";
 import { PLAN_SWAP_HYSTERESIS_MINUTES, SECONDS_PER_MINUTE, SWAP_WEIGHTS } from "./constants";
 import { debtMap } from "./fairness";
 import { onFieldIds } from "./liveState";
@@ -137,11 +137,34 @@ export function recommendSwaps(
 
   const usedBench = new Set<string>();
   const primary: Swap[] = [];
+  // SHORT-HANDED: an empty formation slot is filled from the bench FIRST — that is the change that
+  // gets the side back to full strength, and it never needs anyone to come off. Reserved here so a
+  // lone late arrival isn't spent on a like-for-like swap; emitted after the swaps so a window built
+  // from this recommendation keeps off[i] ↔ on[i] paired (see sanitizeWindow). Without this the
+  // engine told the coach to bench a starter to get the arrival on, and the side stayed a player
+  // down for the rest of the match (QA sweep, 2026-08-17).
+  const fills: Swap[] = [];
+  for (const slot of vacantSlots(match, liveState)) {
+    const cand = benchPool.find((b) => {
+      const p = byId.get(b.playerId);
+      return !usedBench.has(b.playerId) && p !== undefined && positionFit(p, slot) > 0;
+    });
+    if (!cand) continue;
+    usedBench.add(cand.playerId);
+    fills.push({
+      playerOff: null,
+      playerOn: cand.playerId,
+      toSlot: slot,
+      offDebtSeconds: 0,
+      onDebtSeconds: debtOf(cand.playerId),
+      positionFit: positionFit(byId.get(cand.playerId) as Player, slot),
+    });
+  }
   // Subs are ALWAYS like-for-like: the incoming player takes the exact slot of the player going off.
   // The engine never reshuffles on-field players by fit/preferred position — preferred position is a
   // suggestion (it influences WHO comes on, not WHERE), and the coach repositions on the live pitch.
   const positionChanges: PositionChange[] = [];
-  const maxSwaps = options.maxSwaps ?? Math.min(offCandidates.length, benchPool.length);
+  const maxSwaps = options.maxSwaps ?? Math.min(offCandidates.length, benchPool.length - fills.length);
 
   for (const offPs of offCandidates) {
     if (primary.length >= maxSwaps) break;
@@ -179,6 +202,8 @@ export function recommendSwaps(
     });
     usedBench.add(top.b.playerId);
   }
+
+  primary.push(...fills);
 
   // Alternatives: for the primary's first (fillable) off-slot, the next-best single swaps the coach
   // could pick instead (PRD §7.4 — "plus 1–2 alternatives"). Keyed off the first actual swap so an

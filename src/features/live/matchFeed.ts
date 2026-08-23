@@ -11,11 +11,15 @@
  */
 import type { MatchEvent, PositionSlot } from "@/engine";
 
-/** One player replacing another — `offId` is null for a player brought on without anyone going off. */
+/**
+ * One line of a substitution. `offId` is null for a player brought on without anyone going off (a
+ * fill on a short-handed side); `onId` is null for a player taken off with NO replacement (injury
+ * with an empty bench) — that line used to vanish from the log and the parents' note entirely.
+ */
 export interface FeedSwap {
   offId: string | null;
-  onId: string;
-  slot: PositionSlot;
+  onId: string | null;
+  slot: PositionSlot | null;
 }
 
 /** An on-field player changing position (no one leaves the field). */
@@ -65,11 +69,13 @@ export function buildMatchFeed(events: readonly MatchEvent[]): FeedEntry[] {
         const moves: FeedMove[] = e.positionChanges.map((pc) => ({ ...pc }));
         // off[i] pairs with on[i] — the same convention the planner and reducer use. A sub with no
         // swaps at all is a pure reshuffle, which reads very differently and gets its own entry.
-        const swaps: FeedSwap[] = e.on.map((on, k) => ({
-          offId: e.off[k] ?? null,
-          onId: on.playerId,
-          slot: on.slot,
-        }));
+        const swaps: FeedSwap[] = [];
+        for (let k = 0; k < Math.max(e.on.length, e.off.length); k++) {
+          const on = e.on[k];
+          const offId = e.off[k] ?? null;
+          if (!on && offId === null) continue;
+          swaps.push({ offId, onId: on?.playerId ?? null, slot: on?.slot ?? null });
+        }
         if (swaps.length === 0 && moves.length === 0) break; // nothing observable happened
         out.push(
           swaps.length > 0
@@ -131,7 +137,11 @@ export function feedLineText(e: FeedEntry, l: FeedLabels): string {
       return `${l.startLabel} — match under way`;
     case "sub": {
       const subs = e.swaps
-        .map((s) => `${s.offId ? `${l.nameOf(s.offId)} off, ` : ""}${l.nameOf(s.onId)} on (${l.slotLabel(s.slot)})`)
+        .map((s) =>
+          s.onId === null
+            ? `${l.nameOf(s.offId ?? "")} off — no replacement`
+            : `${s.offId ? `${l.nameOf(s.offId)} off, ` : ""}${l.nameOf(s.onId)} on${s.slot ? ` (${l.slotLabel(s.slot)})` : ""}`,
+        )
         .join(" · ");
       const moves = e.moves.map((m) => `${l.nameOf(m.playerId)} → ${l.slotLabel(m.toSlot)}`).join(", ");
       return moves ? `${subs} · ${moves}` : subs;

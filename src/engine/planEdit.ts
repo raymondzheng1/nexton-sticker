@@ -45,17 +45,18 @@ function sanitizeWindow(
 ): { off: string[]; on: { playerId: string; slot: PlannedWindow["on"][number]["slot"] }[]; positionChanges: PositionChange[] } {
   const pairs = window.on
     .map((on, i) => ({ on, off: window.off[i] ?? null }))
-    .filter((p): p is { on: PlannedWindow["on"][number]; off: string } => {
-      if (p.off === null) return false;
-      const outgoing = state.players[p.off];
+    .filter((p) => {
       const incoming = state.players[p.on.playerId];
+      if (incoming === undefined || incoming.onField) return false;
+      // A FILL (short-handed side, nobody comes off) is valid whenever the incoming player is on
+      // the bench — dropping it was what left an 8-of-9 side stuck at eight (QA sweep, 2026-08-17).
+      if (p.off === null) return true;
+      const outgoing = state.players[p.off];
       return (
         outgoing !== undefined &&
         outgoing.onField &&
         !outgoing.locked && // keep-on: never suggested off (invariant #3)
-        outgoing.pinnedSlot === null &&
-        incoming !== undefined &&
-        !incoming.onField
+        outgoing.pinnedSlot === null
       );
     });
   const positionChanges = window.positionChanges.filter((pc) => {
@@ -63,8 +64,11 @@ function sanitizeWindow(
     return ps !== undefined && ps.onField && ps.pinnedSlot === null;
   });
   return {
-    off: pairs.map((p) => p.off),
-    on: pairs.map((p) => ({ playerId: p.on.playerId, slot: state.players[p.off]?.currentSlot ?? p.on.slot })),
+    off: pairs.map((p) => p.off).filter((id): id is string => id !== null),
+    on: pairs.map((p) => ({
+      playerId: p.on.playerId,
+      slot: p.off !== null ? (state.players[p.off]?.currentSlot ?? p.on.slot) : p.on.slot,
+    })),
     positionChanges,
   };
 }

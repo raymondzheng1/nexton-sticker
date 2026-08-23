@@ -169,3 +169,63 @@ describe("SnapshotRepository — a deleted match is recoverable, minutes and all
     expect(restored !== null && tomb !== undefined && restored.updatedAt > tomb.updatedAt).toBe(true);
   });
 });
+
+/** A key-value store whose writes fail on demand — the IndexedDB-quota / Safari-lost-connection case. */
+class FlakyKeyValueStore extends InMemoryKeyValueStore {
+  failNext = false;
+  override async set(key: string, value: string): Promise<void> {
+    if (this.failNext) {
+      this.failNext = false;
+      throw new Error("QuotaExceededError");
+    }
+    return super.set(key, value);
+  }
+}
+
+describe("SnapshotRepository — a failed persist leaves no phantom event (QA sweep, 2026-08-17)", () => {
+  beforeEach(installSeams);
+  afterEach(teardownSeams);
+
+  it("REGRESSION: when the write fails, appendEvent rejects AND the cached log is exactly as before", async () => {
+    const store = new FlakyKeyValueStore();
+    const repo = new SnapshotRepository(store);
+    const players = makePlayers(8);
+    const team = await repo.saveTeam(makeTeamInput(players));
+    const config = makeMatchConfig(5, players);
+    const match = await repo.createMatch({ teamId: team.id, name: "vs Rovers", config, players });
+    const lineup = buildPlan(config, players).startingLineup.assignments;
+
+    store.failNext = true;
+    await expect(repo.appendEvent(match.id, { type: "MATCH_STARTED", atSeconds: 0, lineup })).rejects.toThrow("QuotaExceededError");
+
+    const after = await repo.getMatch(match.id);
+    expect(after?.events).toHaveLength(0); // the failed event is NOT lingering in the cache
+    expect(after?.status).toBe("setup"); // …and the derived status rolled back with it
+    // A later, successful write does not smuggle it in.
+    await repo.updateMatch(match.id, { name: "vs Rovers (renamed)" });
+    const persisted = await repo.getMatch(match.id);
+    expect(persisted?.events).toHaveLength(0);
+  });
+});
+
+describe("SnapshotRepository — a deleted team is a tombstone with a way back", () => {
+  beforeEach(installSeams);
+  afterEach(teardownSeams);
+
+  it("restoreTeam brings the album back, matches and all, and the bin lists it until then", async () => {
+    const repo = new SnapshotRepository(new InMemoryKeyValueStore());
+    const players = makePlayers(8);
+    const team = await repo.saveTeam(makeTeamInput(players));
+    const match = await repo.createMatch({ teamId: team.id, name: "vs Rovers", config: makeMatchConfig(5, players), players });
+
+    await repo.deleteTeam(team.id);
+    expect(await repo.listTeams()).toHaveLength(0);
+    expect((await repo.listDeletedTeams()).map((t) => t.id)).toEqual([team.id]);
+    expect(await repo.getMatch(match.id)).not.toBeNull(); // the matches were never touched
+
+    const back = await repo.restoreTeam(team.id);
+    expect(back?.deletedAt).toBeNull();
+    expect((await repo.listTeams()).map((t) => t.id)).toEqual([team.id]);
+    expect(await repo.listDeletedTeams()).toHaveLength(0);
+  });
+});

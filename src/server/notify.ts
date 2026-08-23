@@ -93,6 +93,11 @@ export const zContactRequest = z.object({
 export type ContactRequest = z.infer<typeof zContactRequest>;
 
 const MIN_FILL_MS = 3_000;
+
+/** Loose RFC-ish shape check — enough to keep a typo out of a mail header, nothing stricter. */
+function looksLikeEmail(s: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(s);
+}
 const MAX_MESSAGE_CHARS = 5_000;
 
 export async function handleContactRequest(
@@ -114,16 +119,20 @@ export async function handleContactRequest(
     // Reject with guidance — never silently truncate what gets delivered.
     return {
       status: 400,
-      body: { error: `Please keep your message under ${MAX_MESSAGE_CHARS.toLocaleString()} characters — email me directly if you need more room.` },
+      body: { error: `Please keep your message under ${MAX_MESSAGE_CHARS.toLocaleString()} characters.` },
     };
   }
 
   const name = data.name?.trim();
   const email = data.email?.trim();
+  // Only a well-formed address goes to Resend as reply_to — a typo there made Resend reject the
+  // WHOLE send, so a genuine enquiry failed on every retry (QA sweep, 2026-08-17). Whatever was
+  // typed still reaches the operator in the body, so nothing is lost; it just isn't a header.
+  const replyTo = email && looksLikeEmail(email) ? email : undefined;
   await send({
     subject: `${APP_FULL_NAME} enquiry${name ? ` from ${name}` : ""}`,
     text: `${message}\n\n— ${name || "(no name given)"}${email ? ` · ${email}` : " · (no reply email given)"}\nvia ${APP_FULL_NAME}`,
-    replyTo: email || undefined,
+    replyTo,
   });
   return { status: 200, body: { ok: true } };
 }
