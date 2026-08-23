@@ -112,8 +112,21 @@ export function chooseStartingLineup(
     return p ? carryForwardOf(p) : 0;
   };
 
-  // 1) GK slot(s).
+  // 1) GK slot(s). ANYONE can keep goal — 🧤 marks who is PREFERRED, it is not a licence (owner
+  //    decision 2026-08-23: "allow me to select any player to be goalie"). A squad with nobody
+  //    marked used to be unable to form a plan at all; now the engine picks someone and the coach
+  //    can re-stick the board. Short-handed with nobody startable at all, the slot stays empty.
   const gkSlotIndices = slots.map((s, i) => (s === "GK" ? i : -1)).filter((i) => i >= 0);
+  let unfilled = 0;
+  const bestKeeperFrom = (pool: Player[]): string | undefined =>
+    pool
+      .filter((p) => !used.has(p.id))
+      .sort(
+        byDesc(
+          (p) => (p.canPlayGK ? 1e12 : 0) + (p.mustStart || p.alwaysOn ? 1e9 : 0) + carryForwardOf(p),
+          (p) => p.id,
+        ),
+      )[0]?.id;
   for (const gkIdx of gkSlotIndices) {
     let chosen: string | undefined;
     if (match.gkPolicy === "fixedGK") {
@@ -123,23 +136,14 @@ export function chooseStartingLineup(
       // player in goal at kick-off created a match that could never be opened (QA sweep,
       // 2026-08-17). Fall back to the best keeper who CAN start; the designated one takes over
       // when they arrive and the next period starts (forceGk).
-      chosen = kickoffPool.some((p) => p.id === designated)
-        ? designated
-        : kickoffPool
-            .filter((p) => p.canPlayGK && !used.has(p.id))
-            .sort(byDesc((p) => (p.mustStart || p.alwaysOn ? 1e9 : 0) + carryForwardOf(p), (p) => p.id))[0]?.id;
+      chosen = kickoffPool.some((p) => p.id === designated) ? designated : bestKeeperFrom(kickoffPool);
     } else {
-      const keepers = kickoffPool
-        .filter((p) => p.canPlayGK && !used.has(p.id))
-        .sort(
-          byDesc(
-            (p) => (p.mustStart || p.alwaysOn ? 1e9 : 0) + carryForwardOf(p),
-            (p) => p.id,
-          ),
-        );
-      chosen = keepers[0]?.id;
+      chosen = bestKeeperFrom(kickoffPool);
     }
-    invariant(chosen !== undefined, "no available player can play GK", { onFieldCount: match.onFieldCount });
+    if (chosen === undefined) {
+      unfilled++; // nobody can start at all — short-handed to the point of an empty goal
+      continue;
+    }
     assignment.set(gkIdx, chosen);
     used.add(chosen);
   }
@@ -158,7 +162,6 @@ export function chooseStartingLineup(
   }
 
   // 3) fill remaining slots by best fit, tie-broken by carry-forward (who's owed a start).
-  let unfilled = 0;
   for (let i = 0; i < slots.length; i++) {
     if (assignment.has(i)) continue;
     const slot = slots[i] as PositionSlot;
@@ -470,7 +473,11 @@ function pickBenchFor(
   return fallback;
 }
 
-/** Rotate the GK among canPlayGK players at a period boundary (gkPolicy "rotateSeparately"). */
+/**
+ * Rotate the GK at a period boundary (gkPolicy "rotateSeparately"): among the 🧤-marked players
+ * when any are here, else through the whole squad — "the gloves rotate through the squad" is what
+ * the setup screen promises, and a squad with nobody marked still needs a keeper each period.
+ */
 function rotateGk(
   match: Match,
   byId: Map<string, Player>,
@@ -484,10 +491,10 @@ function rotateGk(
     .find((ps) => ps?.currentSlot === "GK");
   if (!currentGk) return;
 
-  const keepers = Object.values(state.players)
+  const eligible = Object.values(state.players)
     .filter((ps) => {
       const p = byId.get(ps.playerId);
-      if (!p || !p.canPlayGK) return false;
+      if (!p) return false;
       if (effectiveWeight(p, match) <= 0) return false;
       if (isRetiredAt(p, nowSec)) return false; // out of the match — never rotated into goal
       if (
@@ -498,8 +505,9 @@ function rotateGk(
         return false;
       }
       return true;
-    })
-    .sort(byAsc((ps) => ps.secondsAsGk, (ps) => ps.playerId));
+    });
+  const marked = eligible.filter((ps) => byId.get(ps.playerId)?.canPlayGK === true);
+  const keepers = (marked.length > 0 ? marked : eligible).sort(byAsc((ps) => ps.secondsAsGk, (ps) => ps.playerId));
 
   const next = keepers[0];
   if (!next || next.playerId === currentGk.playerId) return;

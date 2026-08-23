@@ -192,12 +192,15 @@ export const useLiveStore = create<LiveStoreState>((set, get) => {
    * already executed — called the moment reality diverges from the plan: the coach subs manually or
    * sets a keep-on/pin (see {@link invalidatesPlan}), a late player arrives, or a player joins
    * mid-match. Without this the guide keeps naming players who are already on the pitch and its
-   * remaining windows chase a match that no longer exists. No-op when the coach has no approved
-   * plan (the engine plan re-derives on every commit anyway).
+   * remaining windows chase a match that no longer exists.
+   *
+   * Runs even when the guide is EMPTY or missing. A short-handed match starts with "No changes
+   * planned" (an empty guide); treating that as "no guide, nothing to re-plan" meant two arrivals
+   * later the page still said "Still to come · 0 changes" and only the engine's immediate next
+   * change showed (owner report, 2026-08-23). The plan must always reflect the latest squad.
    */
   async function replanGuide(matchNow: SavedMatch, live: LiveState): Promise<SavedMatch> {
-    if (!matchNow.subPlan || matchNow.subPlan.length === 0) return matchNow;
-    const next = replanFromLive(matchNow.config, matchNow.players, live, matchNow.subPlan);
+    const next = replanFromLive(matchNow.config, matchNow.players, live, matchNow.subPlan ?? []);
     return getRepo().updateMatch(matchNow.id, { subPlan: next });
   }
 
